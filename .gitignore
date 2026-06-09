@@ -14,6 +14,14 @@ ENV/
 # Logs
 *.log
 
+# Secrets — هرگز commit نشن
+*.env
+.env
+*firebase-adminsdk*.json
+alert/firebase-adminsdk.json
+google-services.json
+zalertplus-*.json
+
 # Flutter
 alert_app/.dart_tool/
 alert_app/build/
