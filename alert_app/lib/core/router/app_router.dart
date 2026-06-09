@@ -1,38 +1,72 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/alerts/screens/alerts_screen.dart';
 import '../../features/alerts/screens/add_alert_screen.dart';
+import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/language/screens/language_screen.dart';
 
 class AppRouter {
   AppRouter._();
 
   static final router = GoRouter(
-    initialLocation: '/login',
-    redirect: (context, state) {
+    initialLocation: '/splash',
+    redirect: (context, state) async {
       final auth = context.read<AuthProvider>();
-      final isLoggedIn = auth.isLoggedIn;
-      final isLoginRoute = state.matchedLocation == '/login';
+      final prefs = await SharedPreferences.getInstance();
 
-      if (!isLoggedIn && !isLoginRoute) return '/login';
-      if (isLoggedIn && isLoginRoute) return '/alerts';
+      final langSet = prefs.getString('lang') != null;
+      final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+      final isLoggedIn = auth.isLoggedIn;
+
+      final loc = state.matchedLocation;
+
+      // اگه زبان انتخاب نشده
+      if (!langSet && loc != '/language') return '/language';
+
+      // اگه onboarding نشده
+      if (langSet && !onboardingDone && loc != '/onboarding') {
+        return '/onboarding';
+      }
+
+      // اگه لاگین نشده
+      if (langSet && onboardingDone && !isLoggedIn && loc != '/login') {
+        return '/login';
+      }
+
+      // اگه لاگین شده و رفته login
+      if (isLoggedIn && (loc == '/login' || loc == '/splash')) {
+        return '/alerts';
+      }
+
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/alerts',
-        builder: (_, __) => const AlertsScreen(),
-      ),
-      GoRoute(
-        path: '/add-alert',
-        builder: (_, __) => const AddAlertScreen(),
-      ),
+      GoRoute(path: '/splash',    builder: (_, __) => const _SplashScreen()),
+      GoRoute(path: '/language',  builder: (_, __) => const LanguageScreen()),
+      GoRoute(path: '/onboarding',builder: (_, __) => const OnboardingScreen()),
+      GoRoute(path: '/login',     builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/alerts',    builder: (_, __) => const AlertsScreen()),
+      GoRoute(path: '/add-alert', builder: (_, __) => const AddAlertScreen()),
     ],
   );
+}
+
+// صفحه splash فقط برای لحظه اول
+import 'package:flutter/material.dart';
+import '../../core/theme/app_theme.dart';
+
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(color: AppTheme.primary),
+      ),
+    );
+  }
 }

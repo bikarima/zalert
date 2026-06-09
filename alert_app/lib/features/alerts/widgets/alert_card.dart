@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/alert_model.dart';
+import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 
 class AlertCard extends StatelessWidget {
   final AlertModel alert;
+  final String lang;
   final VoidCallback? onDelete;
 
-  const AlertCard({super.key, required this.alert, this.onDelete});
+  const AlertCard({
+    super.key,
+    required this.alert,
+    required this.lang,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isAbove = alert.isAbove;
+    final isAbove  = alert.isAbove;
     final dirColor = isAbove ? AppTheme.green : AppTheme.red;
     final dirIcon  = isAbove ? Icons.arrow_upward : Icons.arrow_downward;
 
@@ -20,10 +27,8 @@ class AlertCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            // آیکون جهت
             Container(
-              width: 44,
-              height: 44,
+              width: 44, height: 44,
               decoration: BoxDecoration(
                 color: dirColor.withOpacity(0.12),
                 shape: BoxShape.circle,
@@ -31,61 +36,41 @@ class AlertCard extends StatelessWidget {
               child: Icon(dirIcon, color: dirColor, size: 22),
             ),
             const SizedBox(width: 14),
-
-            // اطلاعات
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        alert.symbol,
+                  Row(children: [
+                    Text(alert.symbol,
                         style: const TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                        ),
+                        )),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: dirColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: dirColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          alert.direction,
-                          style: TextStyle(color: dirColor, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
+                      child: Text(alert.direction,
+                          style: TextStyle(color: dirColor, fontSize: 11)),
+                    ),
+                  ]),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.flag_outlined,
-                          size: 13, color: AppTheme.textSecond),
-                      const SizedBox(width: 4),
-                      Text(
-                        'هدف: ${alert.targetPrice}',
-                        style: const TextStyle(
-                            color: AppTheme.textSecond, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
                   Text(
-                    alert.createdAt,
+                    '${AppStrings.t(AppStrings.target, lang)}: ${alert.targetPrice}',
                     style: const TextStyle(
-                        color: AppTheme.textSecond, fontSize: 11),
+                        color: AppTheme.textSecond, fontSize: 13),
                   ),
+                  Text(alert.createdAt,
+                      style: const TextStyle(
+                          color: AppTheme.textSecond, fontSize: 11)),
                 ],
               ),
             ),
-
-            // دکمه حذف
             if (onDelete != null)
               IconButton(
                 icon: const Icon(Icons.delete_outline,
