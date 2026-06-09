@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'alert_app/**'
+  workflow_dispatch:   # امکان اجرای دستی از GitHub UI
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── دریافت کد ────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── نصب Java ─────────────────────────────────────────────────
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ── نصب Flutter ──────────────────────────────────────────────
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.1'
+          channel: stable
+          cache: true
+
+      # ── بازیابی google-services.json از Secret ───────────────────
+      - name: Write google-services.json
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > alert_app/android/app/google-services.json
+
+      # ── نصب پکیج‌ها ───────────────────────────────────────────────
+      - name: Flutter pub get
+        working-directory: alert_app
+        run: flutter pub get
+
+      # ── بیلد APK ─────────────────────────────────────────────────
+      - name: Build APK (release)
+        working-directory: alert_app
+        run: flutter build apk --release --no-tree-shake-icons
+
+      # ── آپلود APK به عنوان Artifact ──────────────────────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: alert-release-${{ github.run_number }}
+          path: alert_app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
