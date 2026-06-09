@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Flutter
+alert_app/.dart_tool/
+alert_app/build/
+alert_app/.flutter-plugins
+alert_app/.flutter-plugins-dependencies
+alert_app/.pub-cache/
+alert_app/.pub/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
