@@ -33,7 +33,7 @@ jobs:
 
       # ── بازیابی google-services.json از Secret ───────────────────
       - name: Write google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > alert_app/android/app/google-services.json
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' | base64 -d > alert_app/android/app/google-services.json
 
       # ── نصب پکیج‌ها ───────────────────────────────────────────────
       - name: Flutter pub get

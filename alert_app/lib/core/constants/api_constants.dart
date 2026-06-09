@@ -1,8 +1,7 @@
 class ApiConstants {
   ApiConstants._();
 
-  // آدرس سرور رو اینجا تنظیم کن
-  static const String baseUrl = 'http://YOUR_SERVER_IP:8000';
+  static const String baseUrl = 'http://83.228.225.124:8000';
 
   // اگه API_KEY تنظیم کردی اینجا بذار، وگرنه خالی بذار
   static const String apiKey = '';

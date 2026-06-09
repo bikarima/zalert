@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--  اجازه HTTP به سرور API  -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">83.228.225.124</domain>
+    </domain-config>
+</network-security-config>
