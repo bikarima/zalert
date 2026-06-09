@@ -8,7 +8,10 @@ import 'core/router/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase رو try میکنیم — اگه fail شد اپ باز میشه بدون push
   await NotificationService.instance.initialize();
+
   runApp(const AlertApp());
 }
 

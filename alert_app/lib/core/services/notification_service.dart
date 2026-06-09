@@ -1,102 +1,104 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/foundation.dart';
 
-// هندلر پیام‌های background — باید top-level باشه
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  NotificationService.instance._showLocalNotification(message);
+  try {
+    await Firebase.initializeApp();
+    await NotificationService.instance._showLocalNotification(message);
+  } catch (e) {
+    debugPrint('[Push Background] error: $e');
+  }
 }
 
 class NotificationService {
+  // ── private constructor — هیچ کاری توش انجام نمیشه ─────────────
   NotificationService._();
   static final NotificationService instance = NotificationService._();
 
-  final _fcm = FirebaseMessaging.instance;
+  // Firebase objects فقط بعد از initialize ساخته میشن
+  FirebaseMessaging? _fcm;
   final _localNotif = FlutterLocalNotificationsPlugin();
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
 
-  // callback — وقتی روی نوتیف کلیک شد
+  bool _ready = false;
+  bool get ready => _ready;
+
   void Function(Map<String, dynamic> data)? onNotificationTap;
 
   Future<void> initialize() async {
-    await Firebase.initializeApp();
+    // ── 1. Firebase init ─────────────────────────────────────────
+    try {
+      await Firebase.initializeApp();
+    } catch (e) {
+      debugPrint('[Push] Firebase.initializeApp failed: $e');
+      return; // بدون push کار میکنیم
+    }
 
-    // کانال اندروید
-    const androidChannel = AndroidNotificationChannel(
-      'alerts',
-      'Price Alerts',
-      description: 'MT5 price alert notifications',
-      importance: Importance.max,
-      playSound: true,
-    );
-    await _localNotif
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(androidChannel);
+    // ── 2. Local notifications channel ──────────────────────────
+    try {
+      const androidChannel = AndroidNotificationChannel(
+        'alerts', 'Price Alerts',
+        description: 'MT5 price alert notifications',
+        importance: Importance.max,
+        playSound: true,
+      );
+      await _localNotif
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(androidChannel);
 
-    // تنظیمات local notifications
-    const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-    await _localNotif.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (details) {
-        if (details.payload != null) {
-          // payload رو parse کن و callback رو صدا بزن
-          try {
-            final data = _parsePayload(details.payload!);
-            onNotificationTap?.call(data);
-          } catch (_) {}
-        }
-      },
-    );
+      await _localNotif.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+        onDidReceiveNotificationResponse: (details) {
+          if (details.payload != null) {
+            try {
+              onNotificationTap?.call(_parsePayload(details.payload!));
+            } catch (_) {}
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[Push] Local notifications init failed: $e');
+    }
 
-    // درخواست permission
-    await _fcm.requestPermission(alert: true, sound: true, badge: true);
+    // ── 3. FCM — اینجا ساخته میشه، نه توی constructor ──────────
+    try {
+      _fcm = FirebaseMessaging.instance;
+      await _fcm!.requestPermission(alert: true, sound: true, badge: true);
+      _fcmToken = await _fcm!.getToken();
+      debugPrint('[Push] FCM token: $_fcmToken');
 
-    // دریافت token
-    _fcmToken = await _fcm.getToken();
+      _fcm!.onTokenRefresh.listen((t) => _fcmToken = t);
 
-    // آپدیت token وقتی عوض شد
-    _fcm.onTokenRefresh.listen((token) {
-      _fcmToken = token;
-    });
+      FirebaseMessaging.onMessage.listen(_showLocalNotification);
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((m) => onNotificationTap?.call(m.data));
+      FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler);
 
-    // پیام‌های foreground
-    FirebaseMessaging.onMessage.listen((message) {
-      _showLocalNotification(message);
-    });
-
-    // وقتی اپ از background باز میشه
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      onNotificationTap?.call(message.data);
-    });
-
-    // handler برای background
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      _ready = true;
+    } catch (e) {
+      debugPrint('[Push] FCM setup failed: $e');
+    }
   }
 
-  void _showLocalNotification(RemoteMessage message) {
-    final notification = message.notification;
-    final android = message.notification?.android;
-    if (notification == null) return;
-
-    _localNotif.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
-      NotificationDetails(
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final n = message.notification;
+    if (n == null) return;
+    await _localNotif.show(
+      n.hashCode, n.title, n.body,
+      const NotificationDetails(
         android: AndroidNotificationDetails(
-          'alerts',
-          'Price Alerts',
-          channelDescription: 'MT5 price alert notifications',
+          'alerts', 'Price Alerts',
           importance: Importance.max,
           priority: Priority.high,
-          icon: android?.smallIcon ?? '@mipmap/ic_launcher',
           playSound: true,
         ),
       ),
@@ -105,7 +107,6 @@ class NotificationService {
   }
 
   Map<String, dynamic> _parsePayload(String payload) {
-    // payload به شکل {key: value, ...} ذخیره شده
     final result = <String, dynamic>{};
     final cleaned = payload.replaceAll('{', '').replaceAll('}', '');
     for (final pair in cleaned.split(', ')) {
