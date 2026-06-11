@@ -141,7 +141,11 @@ async def register(body: RegisterRequest, x_api_key: Optional[str] = Header(defa
     هر بار با یه push_token جدید صدا زده بشه، دستگاه جدید اضافه میشه.
     """
     _check_api_key(x_api_key)
+    _check_bot()
     db, _ = _get_db_mt5()
+
+    is_new_user = db.get_user(body.user_id) is None
+
     db.upsert_user(
         user_id=body.user_id,
         username=body.username,
@@ -150,6 +154,41 @@ async def register(body: RegisterRequest, x_api_key: Optional[str] = Header(defa
         device_name=body.device_name
     )
     devices = db.get_user_devices(body.user_id)
+
+    # ارسال پیام تلگرام به کاربر
+    from datetime import datetime
+    import pytz
+    tehran = pytz.timezone('Asia/Tehran')
+    now = datetime.now(tehran).strftime('%Y-%m-%d %H:%M:%S')
+
+    display_name = body.username or str(body.user_id)
+    platform_text = body.platform or 'نامشخص'
+    device_text = body.device_name or 'نامشخص'
+
+    if is_new_user:
+        msg = (
+            f"👋 خوش اومدی به Alert!\n\n"
+            f"👤 نام: {display_name}\n"
+            f"📱 دستگاه: {device_text}\n"
+            f"🖥 پلتفرم: {platform_text}\n"
+            f"🕐 زمان: {now}\n\n"
+            f"آلرت‌های قیمتت رو تنظیم کن و فوری خبر بگیر 🔔"
+        )
+    else:
+        msg = (
+            f"✅ ورود موفق\n\n"
+            f"👤 نام: {display_name}\n"
+            f"📱 دستگاه: {device_text}\n"
+            f"🖥 پلتفرم: {platform_text}\n"
+            f"🕐 زمان: {now}\n"
+            f"📲 تعداد دستگاه‌های فعال: {len(devices)}"
+        )
+
+    try:
+        await _bot_app.bot.send_message(chat_id=body.user_id, text=msg)
+    except Exception as e:
+        print(f"[Register] پیام تلگرام ارسال نشد: {e}")
+
     return {
         "success": True,
         "message": "کاربر ثبت شد",
