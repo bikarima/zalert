@@ -69,6 +69,28 @@ class Database:
         conn.commit()
         conn.close()
 
+        # migration برای دیتابیس‌های قدیمی
+        self._migrate()
+
+    def _migrate(self):
+        """اضافه کردن ستون‌های جدید به دیتابیس‌های قدیمی"""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        migrations = [
+            "ALTER TABLE alerts ADD COLUMN triggered_at TEXT",
+            "ALTER TABLE alerts ADD COLUMN group_id INTEGER NOT NULL DEFAULT 0",
+        ]
+
+        for sql in migrations:
+            try:
+                cursor.execute(sql)
+            except sqlite3.OperationalError:
+                pass  # ستون قبلاً وجود داره
+
+        conn.commit()
+        conn.close()
+
     # ── مدیریت کاربران ────────────────────────────────────────────────
 
     def upsert_user(self, user_id: int, username: str = None,
