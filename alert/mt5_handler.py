@@ -50,7 +50,7 @@ class MT5Handler:
         return None
 
     def get_price(self, symbol: str) -> Optional[float]:
-        """دریافت قیمت فعلی نماد — نماد رو خودکار resolve میکنه"""
+        """دریافت قیمت فعلی نماد — نماد رو خودکار resolve و select میکنه"""
         if not self.initialized:
             if not self.initialize():
                 return None
@@ -60,9 +60,13 @@ class MT5Handler:
             print(f"نماد {symbol} در MT5 پیدا نشد")
             return None
 
-        # اگه نماد resolve شده با ورودی فرق داشت لاگ بزن
         if real_symbol.upper() != symbol.upper():
             print(f"نماد {symbol} → {real_symbol} (resolve شد)")
+
+        # اگه نماد select نشده، اضافه‌اش کن
+        info = mt5.symbol_info(real_symbol)
+        if info is not None and not info.select:
+            mt5.symbol_select(real_symbol, True)
 
         tick = mt5.symbol_info_tick(real_symbol)
         if tick is None:
