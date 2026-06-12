@@ -25,6 +25,17 @@ class _TradesScreenState extends State<TradesScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initDrive());
+  }
+
+  Future<void> _initDrive() async {
+    // اول silent sign-in امتحان کن
+    final silentOk = await GoogleDriveService.instance.signInSilently();
+    if (silentOk && mounted) {
+      await context.read<TradeProvider>().loadFromDrive();
+    } else if (mounted) {
+      setState(() {}); // نمایش صفحه login
+    }
   }
 
   @override
@@ -39,6 +50,20 @@ class _TradesScreenState extends State<TradesScreen>
     final lang     = context.watch<LocaleProvider>().lang;
     final isRtl    = lang == 'fa';
 
+    // اگه sign in نشده، صفحه Google login نشون بده
+    if (!GoogleDriveService.instance.isSignedIn) {
+      return _DriveLoginGate(
+        lang: lang,
+        onSignIn: () async {
+          final ok = await GoogleDriveService.instance.signIn();
+          if (ok && context.mounted) {
+            await context.read<TradeProvider>().loadFromDrive();
+            setState(() {});
+          }
+        },
+      );
+    }
+
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
@@ -48,19 +73,75 @@ class _TradesScreenState extends State<TradesScreen>
             SliverAppBar(
               pinned: true,
               backgroundColor: AppTheme.bg(context),
-              title: Text(lang == 'fa' ? 'معاملات من' : 'My Trades',
-                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+              title: Row(children: [
+                Text(lang == 'fa' ? 'معاملات من' : 'My Trades',
+                    style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                if (provider.syncing) ...[
+                  SizedBox(width: 8.w),
+                  SizedBox(width: 14.w, height: 14.w,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppTheme.green)),
+                ],
+              ]),
               actions: [
-                IconButton(
-                  icon: Icon(
-                    GoogleDriveService.instance.isSignedIn
-                        ? Icons.cloud_done_rounded
-                        : Icons.cloud_outlined,
-                    color: GoogleDriveService.instance.isSignedIn
-                        ? AppTheme.green : AppTheme.textSec(context),
-                    size: 20.sp,
-                  ),
-                  onPressed: () => _handleDriveAuth(context, lang),
+                // منوی Drive
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.cloud_done_rounded,
+                      color: AppTheme.green, size: 20.sp),
+                  onSelected: (v) async {
+                    if (v == 'restore') {
+                      await context.read<TradeProvider>().loadFromDrive();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(lang == 'fa'
+                              ? '✅ معاملات بازیابی شد'
+                              : '✅ Trades restored'),
+                          backgroundColor: AppTheme.green,
+                        ));
+                      }
+                    } else if (v == 'backup') {
+                      final trades = context.read<TradeProvider>().trades
+                          .map((t) => t.toJson()).toList();
+                      await GoogleDriveService.instance.backupTrades(trades);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(lang == 'fa'
+                              ? '✅ بک‌آپ ذخیره شد'
+                              : '✅ Backup saved'),
+                          backgroundColor: AppTheme.green,
+                        ));
+                      }
+                    } else if (v == 'signout') {
+                      await _handleDriveAuth(context, lang);
+                      if (context.mounted) setState(() {});
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'restore',
+                      child: Row(children: [
+                        Icon(Icons.restore_rounded, size: 18.sp, color: AppTheme.blue),
+                        SizedBox(width: 8.w),
+                        Text(lang == 'fa' ? 'بازیابی از Drive' : 'Restore from Drive'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'backup',
+                      child: Row(children: [
+                        Icon(Icons.backup_rounded, size: 18.sp, color: AppTheme.green),
+                        SizedBox(width: 8.w),
+                        Text(lang == 'fa' ? 'بک‌آپ دستی' : 'Manual Backup'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'signout',
+                      child: Row(children: [
+                        Icon(Icons.logout_rounded, size: 18.sp, color: AppTheme.red),
+                        SizedBox(width: 8.w),
+                        Text(lang == 'fa' ? 'خروج از Google' : 'Sign out'),
+                      ]),
+                    ),
+                  ],
                 ),
               ],
               // ── آمار ───────────────────────────────────────────────
@@ -142,6 +223,129 @@ class _TradesScreenState extends State<TradesScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddTradeSheet(lang: lang),
+    );
+  }
+}
+
+// ── Drive Login Gate ──────────────────────────────────────────────────────────
+
+class _DriveLoginGate extends StatefulWidget {
+  final String lang;
+  final VoidCallback onSignIn;
+  const _DriveLoginGate({required this.lang, required this.onSignIn});
+
+  @override
+  State<_DriveLoginGate> createState() => _DriveLoginGateState();
+}
+
+class _DriveLoginGateState extends State<_DriveLoginGate> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final lang  = widget.lang;
+    final isRtl = lang == 'fa';
+
+    return Directionality(
+      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: AppTheme.bg(context),
+        appBar: AppBar(
+          backgroundColor: AppTheme.bg(context),
+          title: Text(lang == 'fa' ? 'معاملات من' : 'My Trades',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80.w, height: 80.w,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.cloud_outlined,
+                      size: 40.sp, color: const Color(0xFF4285F4)),
+                ).animate().scale(duration: 500.ms, curve: Curves.elasticOut),
+                SizedBox(height: 20.h),
+
+                Text(
+                  lang == 'fa'
+                      ? 'برای دسترسی به معاملات\nوارد Google Drive شوید'
+                      : 'Sign in to Google Drive\nto access your trades',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppTheme.text(context),
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.bold,
+                    height: 1.5,
+                  ),
+                ),
+                SizedBox(height: 10.h),
+
+                Text(
+                  lang == 'fa'
+                      ? 'تمام معاملات شما به صورت امن در Google Drive ذخیره میشن'
+                      : 'All your trades are securely stored in Google Drive',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: AppTheme.textSec(context), fontSize: 13.sp),
+                ),
+                SizedBox(height: 32.h),
+
+                // دکمه Google Sign In
+                GestureDetector(
+                  onTap: _loading ? null : () async {
+                    setState(() => _loading = true);
+                    await widget.onSignIn();
+                    if (mounted) setState(() => _loading = false);
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 14.h),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14.r),
+                      boxShadow: [BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12.r, offset: const Offset(0, 4),
+                      )],
+                    ),
+                    child: _loading
+                        ? SizedBox(width: 24.w, height: 24.w,
+                            child: const CircularProgressIndicator(strokeWidth: 2))
+                        : Row(mainAxisSize: MainAxisSize.min, children: [
+                            // Google logo colors
+                            RichText(text: const TextSpan(
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              children: [
+                                TextSpan(text: 'G', style: TextStyle(color: Color(0xFF4285F4))),
+                                TextSpan(text: 'o', style: TextStyle(color: Color(0xFFEA4335))),
+                                TextSpan(text: 'o', style: TextStyle(color: Color(0xFFFBBC05))),
+                                TextSpan(text: 'g', style: TextStyle(color: Color(0xFF4285F4))),
+                                TextSpan(text: 'l', style: TextStyle(color: Color(0xFF34A853))),
+                                TextSpan(text: 'e', style: TextStyle(color: Color(0xFFEA4335))),
+                              ],
+                            )),
+                            SizedBox(width: 12.w),
+                            Text(
+                              lang == 'fa' ? 'ورود با Google' : 'Sign in with Google',
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -536,10 +740,11 @@ class _AddTradeSheetState extends State<_AddTradeSheet> {
 
   Future<void> _submit() async {
     if (_symbolCtrl.text.isEmpty || _entryCtrl.text.isEmpty) return;
+    if (!GoogleDriveService.instance.isSignedIn) return;
 
     setState(() => _uploading = true);
 
-    await context.read<TradeProvider>().addTrade(
+    final result = await context.read<TradeProvider>().addTrade(
       symbol:     _symbolCtrl.text,
       type:       _type,
       entry:      double.tryParse(_entryCtrl.text) ?? 0,
@@ -550,7 +755,17 @@ class _AddTradeSheetState extends State<_AddTradeSheet> {
       imageFile:  _imageFile,
     );
 
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      if (result != null) {
+        Navigator.pop(context);
+      } else {
+        setState(() => _uploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(context.read<TradeProvider>().error ?? 'Error'),
+          backgroundColor: AppTheme.red,
+        ));
+      }
+    }
   }
 
   @override
