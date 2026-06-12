@@ -67,6 +67,13 @@ dependencies:
   timezone: ^0.9.4
   flutter_timezone: ^5.1.0
 
+  # Image & Google Drive
+  image_picker: ^1.1.2
+  google_sign_in: ^6.2.1
+  googleapis: ^13.2.0
+  http: ^1.2.2
+  path: ^1.9.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

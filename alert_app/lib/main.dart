@@ -8,6 +8,7 @@ import 'core/l10n/locale_provider.dart';
 import 'features/alerts/providers/alert_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/calendar/providers/calendar_provider.dart';
+import 'features/trades/providers/trade_provider.dart';
 import 'core/router/app_router.dart';
 
 void main() async {
@@ -28,6 +29,7 @@ class AlertApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => AlertProvider()),
         ChangeNotifierProvider(create: (_) => CalendarProvider()),
+        ChangeNotifierProvider(create: (_) => TradeProvider()),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (_, themeProvider, localeProvider, __) {

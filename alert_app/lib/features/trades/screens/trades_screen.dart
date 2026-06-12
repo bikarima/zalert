@@ -1,133 +1,43 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
-import '../../../core/l10n/locale_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../providers/trade_provider.dart';
 import '../../../core/models/trade_model.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/l10n/locale_provider.dart';
+import '../../../core/services/drive/google_drive_service.dart';
 import '../../../core/theme/app_theme.dart';
 
 class TradesScreen extends StatefulWidget {
   const TradesScreen({super.key});
-
   @override
   State<TradesScreen> createState() => _TradesScreenState();
 }
 
-class _TradesScreenState extends State<TradesScreen> {
-  List<TradeModel> _trades = [];
-  bool _loading = true;
+class _TradesScreenState extends State<TradesScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabs;
 
   @override
   void initState() {
     super.initState();
-    _loadTrades();
+    _tabs = TabController(length: 2, vsync: this);
   }
 
-  Future<void> _loadTrades() async {
-    final json = await StorageService.instance.getTradesJson();
-    if (json != null && json.isNotEmpty) {
-      try {
-        setState(() {
-          _trades  = TradeModel.listFromJson(json);
-          _loading = false;
-        });
-        return;
-      } catch (_) {}
-    }
-    setState(() => _loading = false);
-  }
-
-  Future<void> _saveTrades() async {
-    await StorageService.instance.saveTradesJson(
-      TradeModel.listToJson(_trades),
-    );
-  }
-
-  void _openAddForm() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _TradeForm(
-        lang: context.read<LocaleProvider>().lang,
-        onSave: (trade) {
-          setState(() => _trades.insert(0, trade));
-          _saveTrades();
-        },
-      ),
-    );
-  }
-
-  void _closeTrade(TradeModel trade) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final exitCtrl = TextEditingController();
-        final lang = context.read<LocaleProvider>().lang;
-        return AlertDialog(
-          backgroundColor: AppTheme.card(context),
-          title: Text(
-            lang == 'fa' ? 'بستن پوزیشن' : 'Close Position',
-            style: TextStyle(
-                color: AppTheme.text(context), fontSize: 16.sp),
-          ),
-          content: TextField(
-            controller: exitCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: lang == 'fa' ? 'قیمت خروج' : 'Exit Price',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(lang == 'fa' ? 'انصراف' : 'Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final exit = double.tryParse(exitCtrl.text);
-                if (exit != null) {
-                  setState(() {
-                    final idx = _trades.indexWhere((t) => t.id == trade.id);
-                    if (idx >= 0) {
-                      _trades[idx] = trade.copyWith(
-                        exit: exit,
-                        closedAt: DateTime.now(),
-                      );
-                    }
-                  });
-                  _saveTrades();
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text(lang == 'fa' ? 'ثبت' : 'Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _deleteTrade(String id) {
-    setState(() => _trades.removeWhere((t) => t.id == id));
-    _saveTrades();
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final lang  = context.watch<LocaleProvider>().lang;
-    final isRtl = lang == 'fa';
-
-    // آمار کلی
-    final closedTrades = _trades.where((t) => t.isClosed).toList();
-    final totalPnl     = closedTrades.fold(
-      0.0, (sum, t) => sum + (t.pnl ?? 0));
-    final wins         = closedTrades.where((t) => t.isWin).length;
-    final winRate      = closedTrades.isEmpty
-        ? 0.0
-        : (wins / closedTrades.length) * 100;
+    final provider = context.watch<TradeProvider>();
+    final lang     = context.watch<LocaleProvider>().lang;
+    final isRtl    = lang == 'fa';
 
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
@@ -135,137 +45,156 @@ class _TradesScreenState extends State<TradesScreen> {
         backgroundColor: AppTheme.bg(context),
         body: CustomScrollView(
           slivers: [
+            // ── Header ─────────────────────────────────────────────
             SliverAppBar(
               pinned: true,
+              expandedHeight: 130.h,
               backgroundColor: AppTheme.bg(context),
-              title: Text(
-                lang == 'fa' ? 'معاملات من' : 'My Trades',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16.sp,
-                    color: AppTheme.text(context)),
+              flexibleSpace: FlexibleSpaceBar(
+                background: _TradesHeader(provider: provider, lang: lang),
+              ),
+              title: Text(lang == 'fa' ? 'معاملات من' : 'My Trades',
+                  style: TextStyle(
+                      fontSize: 16.sp, fontWeight: FontWeight.bold)),
+              actions: [
+                // دکمه Google Drive login
+                IconButton(
+                  icon: Icon(
+                    GoogleDriveService.instance.isSignedIn
+                        ? Icons.cloud_done_rounded
+                        : Icons.cloud_outlined,
+                    color: GoogleDriveService.instance.isSignedIn
+                        ? AppTheme.green : AppTheme.textSec(context),
+                    size: 20.sp,
+                  ),
+                  onPressed: () => _handleDriveAuth(context, lang),
+                ),
+              ],
+              bottom: TabBar(
+                controller: _tabs,
+                tabs: [
+                  Tab(text: lang == 'fa' ? 'باز' : 'Open'),
+                  Tab(text: lang == 'fa' ? 'بسته' : 'Closed'),
+                ],
               ),
             ),
 
-            if (!_loading) ...[
-              // خلاصه آمار
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(16.w),
-                  child: _SummaryCards(
-                    totalPnl:  totalPnl,
-                    winRate:   winRate,
-                    tradeCount: _trades.length,
+            SliverFillRemaining(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _TradeList(
+                    trades: provider.openTrades,
                     lang: lang,
+                    isOpen: true,
                   ),
-                ),
+                  _TradeList(
+                    trades: provider.closedTrades,
+                    lang: lang,
+                    isOpen: false,
+                  ),
+                ],
               ),
-
-              if (_trades.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.receipt_long_outlined,
-                            size: 56.sp,
-                            color: AppTheme.textSec(context)),
-                        SizedBox(height: 12.h),
-                        Text(
-                          lang == 'fa'
-                              ? 'هیچ معامله‌ای ثبت نشده'
-                              : 'No trades recorded yet',
-                          style: TextStyle(
-                              color: AppTheme.textSec(context),
-                              fontSize: 14.sp),
-                        ),
-                      ],
-                    ).animate().fadeIn(duration: 400.ms),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => _TradeCard(
-                      trade: _trades[i],
-                      lang: lang,
-                      onClose: _trades[i].isClosed
-                          ? null
-                          : () => _closeTrade(_trades[i]),
-                      onDelete: () => _deleteTrade(_trades[i].id),
-                    ).animate().fadeIn(
-                        duration: 300.ms,
-                        delay: Duration(milliseconds: i * 50)),
-                    childCount: _trades.length,
-                  ),
-                ),
-
-              SliverToBoxAdapter(child: SizedBox(height: 90.h)),
-            ] else
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              ),
+            ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openAddForm,
-          icon: Icon(Icons.add_rounded, size: 20.sp),
-          label: Text(
-            lang == 'fa' ? 'معامله جدید' : 'New Trade',
-            style: TextStyle(fontSize: 13.sp),
-          ),
-          backgroundColor: AppTheme.primary,
-        ).animate().scale(duration: 300.ms, curve: Curves.elasticOut),
+
+        // ── دکمه Enter Position ───────────────────────────────────
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton.extended(
+              onPressed: () => _showAddTradeSheet(context, lang),
+              icon: Icon(Icons.add_chart_rounded, size: 20.sp),
+              label: Text(
+                lang == 'fa' ? 'ورود به معامله' : 'Enter Position',
+                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.green,
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Future<void> _handleDriveAuth(BuildContext context, String lang) async {
+    if (GoogleDriveService.instance.isSignedIn) {
+      await GoogleDriveService.instance.signOut();
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(lang == 'fa' ? 'از Google خارج شدید' : 'Signed out from Google'),
+      ));
+    } else {
+      final ok = await GoogleDriveService.instance.signIn();
+      setState(() {});
+      if (ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(lang == 'fa'
+              ? 'وارد Google Drive شدید ✓'
+              : 'Signed in to Google Drive ✓'),
+          backgroundColor: AppTheme.green,
+        ));
+      }
+    }
+  }
+
+  void _showAddTradeSheet(BuildContext context, String lang) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddTradeSheet(lang: lang),
     );
   }
 }
 
-// ── Summary Cards ─────────────────────────────────────────────────────────────
+// ── Header آمار ──────────────────────────────────────────────────────────────
 
-class _SummaryCards extends StatelessWidget {
-  final double totalPnl;
-  final double winRate;
-  final int tradeCount;
+class _TradesHeader extends StatelessWidget {
+  final TradeProvider provider;
   final String lang;
-
-  const _SummaryCards({
-    required this.totalPnl,
-    required this.winRate,
-    required this.tradeCount,
-    required this.lang,
-  });
+  const _TradesHeader({required this.provider, required this.lang});
 
   @override
   Widget build(BuildContext context) {
-    final isPnlPositive = totalPnl >= 0;
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            label: lang == 'fa' ? 'کل سود/ضرر' : 'Total P&L',
-            value:
-                '${isPnlPositive ? '+' : ''}\$${totalPnl.toStringAsFixed(2)}',
-            color: isPnlPositive ? AppTheme.green : AppTheme.red,
-          ),
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
+    final totalPnl = provider.totalPnl;
+    final pnlColor = totalPnl >= 0 ? AppTheme.green : AppTheme.red;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF0D1A0D), const Color(0xFF0A0A14)]
+              : [const Color(0xFFE8F5E9), const Color(0xFFF5F5FF)],
         ),
-        SizedBox(width: 10.w),
-        Expanded(
-          child: _StatCard(
-            label: lang == 'fa' ? 'نرخ برد' : 'Win Rate',
-            value: '${winRate.toStringAsFixed(1)}%',
-            color: AppTheme.primary,
+      ),
+      padding: EdgeInsets.fromLTRB(16.w, 68.h, 16.w, 8.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _StatCard(
+            label: lang == 'fa' ? 'باز' : 'Open',
+            value: '${provider.openTrades.length}',
+            color: AppTheme.blue,
+            icon: Icons.trending_up_rounded,
           ),
-        ),
-        SizedBox(width: 10.w),
-        Expanded(
-          child: _StatCard(
-            label: lang == 'fa' ? 'معاملات' : 'Trades',
-            value: '$tradeCount',
+          _StatCard(
+            label: lang == 'fa' ? 'کل P&L' : 'Total P&L',
+            value: totalPnl.toStringAsFixed(0),
+            color: pnlColor,
+            icon: totalPnl >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+          ),
+          _StatCard(
+            label: lang == 'fa' ? 'Win Rate' : 'Win Rate',
+            value: '${provider.winRate.toStringAsFixed(0)}%',
             color: AppTheme.orange,
+            icon: Icons.emoji_events_rounded,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -274,538 +203,616 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final IconData icon;
 
   const _StatCard({
-    required this.label, required this.value, required this.color,
+    required this.label, required this.value,
+    required this.color, required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: color.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: color, size: 18.sp),
+        SizedBox(height: 4.h),
+        Text(value, style: TextStyle(
+            color: color, fontSize: 14.sp, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(
+            color: AppTheme.textSec(context), fontSize: 10.sp)),
+      ]),
+    );
+  }
+}
+
+// ── لیست معاملات ─────────────────────────────────────────────────────────────
+
+class _TradeList extends StatelessWidget {
+  final List<TradeModel> trades;
+  final String lang;
+  final bool isOpen;
+
+  const _TradeList({required this.trades, required this.lang, required this.isOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    if (trades.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.bar_chart_rounded, size: 48.sp, color: AppTheme.textSec(context)),
+          SizedBox(height: 10.h),
+          Text(
+            lang == 'fa'
+                ? (isOpen ? 'معامله باز ندارید' : 'معامله بسته‌ای ندارید')
+                : (isOpen ? 'No open trades' : 'No closed trades'),
+            style: TextStyle(color: AppTheme.textSec(context), fontSize: 13.sp),
+          ),
+        ]),
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(12.w),
+      itemCount: trades.length,
+      itemBuilder: (_, i) => _TradeCard(
+        trade: trades[i],
+        lang:  lang,
+      ).animate().fadeIn(duration: 250.ms, delay: Duration(milliseconds: i * 50)),
+    );
+  }
+}
+
+// ── کارت معامله ──────────────────────────────────────────────────────────────
+
+class _TradeCard extends StatelessWidget {
+  final TradeModel trade;
+  final String lang;
+
+  const _TradeCard({required this.trade, required this.lang});
+
+  @override
+  Widget build(BuildContext context) {
+    final isBuy  = trade.isBuy;
+    final color  = isBuy ? AppTheme.green : AppTheme.red;
+    final pnl    = trade.pnl;
+    final pnlCol = pnl == null ? AppTheme.textSec(context)
+        : (pnl >= 0 ? AppTheme.green : AppTheme.red);
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 10.h),
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: AppTheme.border(context)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: color, fontSize: 16.sp, fontWeight: FontWeight.bold),
+          // ── ردیف اصلی ───────────────────────────────────────────
+          Padding(
+            padding: EdgeInsets.all(12.w),
+            child: Row(children: [
+              // آیکون
+              Container(
+                width: 42.w, height: 42.w,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withOpacity(0.3)),
+                ),
+                child: Icon(
+                  isBuy ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                  color: color, size: 18.sp,
+                ),
+              ),
+              SizedBox(width: 10.w),
+
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Text(trade.symbol,
+                        style: TextStyle(color: AppTheme.text(context),
+                            fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                    SizedBox(width: 6.w),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6.r),
+                      ),
+                      child: Text(
+                        isBuy ? (lang == 'fa' ? 'خرید' : 'BUY')
+                               : (lang == 'fa' ? 'فروش' : 'SELL'),
+                        style: TextStyle(color: color,
+                            fontSize: 9.sp, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (trade.isOpen) ...[
+                      SizedBox(width: 4.w),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                        decoration: BoxDecoration(
+                          color: AppTheme.blue.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6.r),
+                        ),
+                        child: Text(
+                          lang == 'fa' ? '🔴 باز' : '🔴 OPEN',
+                          style: TextStyle(color: AppTheme.blue,
+                              fontSize: 9.sp, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ]),
+                  SizedBox(height: 4.h),
+                  Text(
+                    lang == 'fa'
+                        ? 'ورود: ${trade.entry}  •  حجم: ${trade.lotSize}'
+                        : 'Entry: ${trade.entry}  •  Lot: ${trade.lotSize}',
+                    style: TextStyle(color: AppTheme.textSec(context), fontSize: 11.sp),
+                  ),
+                  if (trade.hasSL || trade.hasTP) ...[
+                    SizedBox(height: 2.h),
+                    Row(children: [
+                      if (trade.hasSL) _SmallChip(
+                        'SL: ${trade.stopLoss}', AppTheme.red),
+                      if (trade.hasSL && trade.hasTP) SizedBox(width: 6.w),
+                      if (trade.hasTP) _SmallChip(
+                        'TP: ${trade.takeProfit}', AppTheme.green),
+                      if (trade.riskRewardRatio != null) ...[
+                        SizedBox(width: 6.w),
+                        _SmallChip('R:R ${trade.riskRewardRatio!.toStringAsFixed(1)}',
+                            AppTheme.orange),
+                      ],
+                    ]),
+                  ],
+                ],
+              )),
+
+              // P&L یا دکمه بستن
+              Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                if (pnl != null)
+                  Text(
+                    '${pnl >= 0 ? '+' : ''}${pnl.toStringAsFixed(1)}',
+                    style: TextStyle(color: pnlCol,
+                        fontSize: 14.sp, fontWeight: FontWeight.bold),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () => _closeTradeDialog(context),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                            colors: [AppTheme.primary, Color(0xFF9C27B0)]),
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                      child: Text(
+                        lang == 'fa' ? 'بستن' : 'Close',
+                        style: TextStyle(color: Colors.white,
+                            fontSize: 11.sp, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                SizedBox(height: 2.h),
+                Text(
+                  _formatDate(trade.openedAt, lang),
+                  style: TextStyle(color: AppTheme.textSec(context), fontSize: 9.sp),
+                ),
+              ]),
+            ]),
           ),
-          SizedBox(height: 4.h),
-          Text(
-            label,
-            style: TextStyle(
-              color: AppTheme.textSec(context), fontSize: 10.sp),
-            textAlign: TextAlign.center,
+
+          // ── عکس چارت ─────────────────────────────────────────────
+          if (trade.hasImage) ...[
+            Divider(color: AppTheme.divider(context), height: 1),
+            ClipRRect(
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(16.r),
+                bottomRight: Radius.circular(16.r),
+              ),
+              child: CachedNetworkImage(
+                imageUrl: trade.imageUrl!,
+                height: 160.h,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  height: 160.h,
+                  color: AppTheme.surface(context),
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  height: 160.h,
+                  color: AppTheme.surface(context),
+                  child: Icon(Icons.broken_image_outlined,
+                      color: AppTheme.textSec(context)),
+                ),
+              ),
+            ),
+          ],
+
+          // ── توضیحات ───────────────────────────────────────────────
+          if (trade.notes != null && trade.notes!.isNotEmpty) ...[
+            Divider(color: AppTheme.divider(context), height: 1),
+            Padding(
+              padding: EdgeInsets.all(10.w),
+              child: Text(trade.notes!,
+                  style: TextStyle(
+                      color: AppTheme.textSec(context), fontSize: 11.sp)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _closeTradeDialog(BuildContext context) async {
+    final ctrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.card(context),
+        title: Text(lang == 'fa' ? 'بستن معامله' : 'Close Trade',
+            style: TextStyle(color: AppTheme.text(context), fontSize: 14.sp)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textDirection: TextDirection.ltr,
+          style: TextStyle(color: AppTheme.text(context)),
+          decoration: InputDecoration(
+            labelText: lang == 'fa' ? 'قیمت خروج' : 'Exit Price',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(lang == 'fa' ? 'انصراف' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(ctrl.text);
+              if (val != null) {
+                context.read<TradeProvider>().closeTrade(trade.id, val);
+                Navigator.pop(context);
+              }
+            },
+            child: Text(lang == 'fa' ? 'ثبت' : 'Save'),
           ),
         ],
       ),
     );
   }
+
+  String _formatDate(DateTime dt, String lang) {
+    return '${dt.year}/${dt.month.toString().padLeft(2,'0')}/${dt.day.toString().padLeft(2,'0')}';
+  }
 }
 
-// ── Trade Card ────────────────────────────────────────────────────────────────
-
-class _TradeCard extends StatelessWidget {
-  final TradeModel trade;
-  final String lang;
-  final VoidCallback? onClose;
-  final VoidCallback onDelete;
-
-  const _TradeCard({
-    required this.trade,
-    required this.lang,
-    required this.onClose,
-    required this.onDelete,
-  });
+class _SmallChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SmallChip(this.label, this.color);
 
   @override
   Widget build(BuildContext context) {
-    final isBuy = trade.type == 'buy';
-    final typeColor = isBuy ? AppTheme.green : AppTheme.red;
-    final pnl = trade.pnl;
-    final isPnlPositive = (pnl ?? 0) >= 0;
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 5.h),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.card(context),
-          borderRadius: BorderRadius.circular(14.r),
-          border: Border.all(color: AppTheme.border(context)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(14.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Symbol badge
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: 10.w, vertical: 4.h),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    child: Text(
-                      trade.symbol,
-                      style: TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  // Buy/Sell badge
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: 8.w, vertical: 4.h),
-                    decoration: BoxDecoration(
-                      color: typeColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    child: Text(
-                      isBuy
-                          ? (lang == 'fa' ? 'خرید' : 'BUY')
-                          : (lang == 'fa' ? 'فروش' : 'SELL'),
-                      style: TextStyle(
-                          color: typeColor,
-                          fontSize: 11.sp,
-                          fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const Spacer(),
-                  // P&L
-                  if (pnl != null)
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 10.w, vertical: 4.h),
-                      decoration: BoxDecoration(
-                        color: (isPnlPositive ? AppTheme.green : AppTheme.red)
-                            .withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8.r),
-                        border: Border.all(
-                          color: (isPnlPositive
-                                  ? AppTheme.green
-                                  : AppTheme.red)
-                              .withOpacity(0.3),
-                        ),
-                      ),
-                      child: Text(
-                        '${isPnlPositive ? '+' : ''}\$${pnl.toStringAsFixed(2)}',
-                        style: TextStyle(
-                            color: isPnlPositive
-                                ? AppTheme.green
-                                : AppTheme.red,
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 8.w, vertical: 4.h),
-                      decoration: BoxDecoration(
-                        color: AppTheme.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8.r),
-                      ),
-                      child: Text(
-                        lang == 'fa' ? 'باز' : 'Open',
-                        style: TextStyle(
-                            color: AppTheme.orange, fontSize: 11.sp),
-                      ),
-                    ),
-                ],
-              ),
-              SizedBox(height: 10.h),
-              Row(
-                children: [
-                  _InfoChip(
-                    label: lang == 'fa' ? 'ورود' : 'Entry',
-                    value: trade.entry.toString(),
-                    context: context,
-                  ),
-                  SizedBox(width: 8.w),
-                  if (trade.exit != null)
-                    _InfoChip(
-                      label: lang == 'fa' ? 'خروج' : 'Exit',
-                      value: trade.exit!.toString(),
-                      context: context,
-                    ),
-                  SizedBox(width: 8.w),
-                  _InfoChip(
-                    label: lang == 'fa' ? 'لات' : 'Lot',
-                    value: trade.lotSize.toString(),
-                    context: context,
-                  ),
-                ],
-              ),
-              if (trade.notes != null && trade.notes!.isNotEmpty) ...[
-                SizedBox(height: 8.h),
-                Text(
-                  trade.notes!,
-                  style: TextStyle(
-                      color: AppTheme.textSec(context), fontSize: 11.sp),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              SizedBox(height: 8.h),
-              Row(
-                children: [
-                  Icon(Icons.access_time,
-                      size: 11.sp, color: AppTheme.textSec(context)),
-                  SizedBox(width: 4.w),
-                  Text(
-                    _formatDate(trade.openedAt),
-                    style: TextStyle(
-                        color: AppTheme.textSec(context), fontSize: 10.sp),
-                  ),
-                  const Spacer(),
-                  if (onClose != null)
-                    TextButton(
-                      onPressed: onClose,
-                      style: TextButton.styleFrom(
-                        minimumSize: Size.zero,
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 10.w, vertical: 4.h),
-                        foregroundColor: AppTheme.primary,
-                      ),
-                      child: Text(
-                        lang == 'fa' ? 'بستن' : 'Close',
-                        style: TextStyle(fontSize: 11.sp),
-                      ),
-                    ),
-                  IconButton(
-                    onPressed: onDelete,
-                    icon: Icon(Icons.delete_outline,
-                        size: 16.sp, color: AppTheme.red),
-                    constraints: const BoxConstraints(),
-                    padding: EdgeInsets.all(4.w),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime d) {
-    return '${d.year}/${d.month.toString().padLeft(2, '0')}/'
-        '${d.day.toString().padLeft(2, '0')}';
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final BuildContext context;
-
-  const _InfoChip({
-    required this.label, required this.value, required this.context,
-  });
-
-  @override
-  Widget build(BuildContext ctx) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
       decoration: BoxDecoration(
-        color: AppTheme.surface(ctx),
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: AppTheme.border(ctx)),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4.r),
       ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          color: AppTheme.text(ctx), fontSize: 11.sp),
-      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 9.sp)),
     );
   }
 }
 
-// ── Trade Form (Bottom Sheet) ─────────────────────────────────────────────────
+// ── Add Trade Bottom Sheet ────────────────────────────────────────────────────
 
-class _TradeForm extends StatefulWidget {
+class _AddTradeSheet extends StatefulWidget {
   final String lang;
-  final Function(TradeModel) onSave;
-
-  const _TradeForm({required this.lang, required this.onSave});
+  const _AddTradeSheet({required this.lang});
 
   @override
-  State<_TradeForm> createState() => _TradeFormState();
+  State<_AddTradeSheet> createState() => _AddTradeSheetState();
 }
 
-class _TradeFormState extends State<_TradeForm> {
-  final _formKey    = GlobalKey<FormState>();
+class _AddTradeSheetState extends State<_AddTradeSheet> {
   final _symbolCtrl = TextEditingController();
   final _entryCtrl  = TextEditingController();
-  final _exitCtrl   = TextEditingController();
   final _lotCtrl    = TextEditingController(text: '0.01');
+  final _slCtrl     = TextEditingController();
+  final _tpCtrl     = TextEditingController();
   final _notesCtrl  = TextEditingController();
-  String _type = 'buy';
+  String _type      = 'buy';
+  File?  _imageFile;
+  bool   _uploading = false;
 
   @override
   void dispose() {
-    _symbolCtrl.dispose();
-    _entryCtrl.dispose();
-    _exitCtrl.dispose();
-    _lotCtrl.dispose();
-    _notesCtrl.dispose();
+    _symbolCtrl.dispose(); _entryCtrl.dispose(); _lotCtrl.dispose();
+    _slCtrl.dispose(); _tpCtrl.dispose(); _notesCtrl.dispose();
     super.dispose();
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    const uuid = Uuid();
-    final trade = TradeModel(
-      id:      uuid.v4(),
-      symbol:  _symbolCtrl.text.trim().toUpperCase(),
-      type:    _type,
-      entry:   double.parse(_entryCtrl.text),
-      exit:    _exitCtrl.text.trim().isNotEmpty
-               ? double.tryParse(_exitCtrl.text)
-               : null,
-      lotSize: double.parse(_lotCtrl.text),
-      notes:   _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      openedAt: DateTime.now(),
-      closedAt: _exitCtrl.text.trim().isNotEmpty ? DateTime.now() : null,
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final result = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (result != null) setState(() => _imageFile = File(result.path));
+  }
+
+  Future<void> _submit() async {
+    if (_symbolCtrl.text.isEmpty || _entryCtrl.text.isEmpty) return;
+
+    setState(() => _uploading = true);
+
+    await context.read<TradeProvider>().addTrade(
+      symbol:     _symbolCtrl.text,
+      type:       _type,
+      entry:      double.tryParse(_entryCtrl.text) ?? 0,
+      lotSize:    double.tryParse(_lotCtrl.text)   ?? 0.01,
+      stopLoss:   double.tryParse(_slCtrl.text),
+      takeProfit: double.tryParse(_tpCtrl.text),
+      notes:      _notesCtrl.text.isEmpty ? null : _notesCtrl.text,
+      imageFile:  _imageFile,
     );
-    widget.onSave(trade);
-    Navigator.pop(context);
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final lang  = widget.lang;
-    final isBuy = _type == 'buy';
+    final isRtl = lang == 'fa';
 
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom),
-      decoration: BoxDecoration(
-        color: AppTheme.card(context),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(20.w),
-        child: Form(
-          key: _formKey,
+    return Directionality(
+      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surface(context),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        ),
+        padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w,
+            MediaQuery.of(context).viewInsets.bottom + 24.h),
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40.w, height: 4.h,
-                  decoration: BoxDecoration(
-                    color: AppTheme.border(context),
-                    borderRadius: BorderRadius.circular(2.r),
-                  ),
+              // handle
+              Center(child: Container(
+                width: 40.w, height: 4.h,
+                decoration: BoxDecoration(
+                  color: AppTheme.border(context),
+                  borderRadius: BorderRadius.circular(2.r),
                 ),
-              ),
-              SizedBox(height: 16.h),
-              Text(
-                lang == 'fa' ? 'ثبت معامله جدید' : 'Record New Trade',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: AppTheme.text(context),
-                    fontSize: 16.sp, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 20.h),
+              )),
+              SizedBox(height: 14.h),
 
-              // Buy / Sell
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _type = 'buy'),
-                      child: AnimatedContainer(
-                        duration: 200.ms,
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
-                        decoration: BoxDecoration(
-                          color: isBuy
-                              ? AppTheme.green.withOpacity(0.15)
-                              : AppTheme.surface(context),
-                          borderRadius: BorderRadius.circular(10.r),
-                          border: Border.all(
-                              color: isBuy
-                                  ? AppTheme.green
-                                  : AppTheme.border(context),
-                              width: isBuy ? 2 : 1),
-                        ),
-                        child: Text(
-                          lang == 'fa' ? '📈 خرید' : '📈 Buy',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: isBuy
-                                  ? AppTheme.green
-                                  : AppTheme.textSec(context),
-                              fontSize: 14.sp,
-                              fontWeight: isBuy
-                                  ? FontWeight.bold
-                                  : FontWeight.normal),
-                        ),
+              Row(children: [
+                Icon(Icons.add_chart_rounded, color: AppTheme.green, size: 20.sp),
+                SizedBox(width: 8.w),
+                Text(lang == 'fa' ? 'ورود به معامله' : 'Enter Position',
+                    style: TextStyle(color: AppTheme.text(context),
+                        fontSize: 15.sp, fontWeight: FontWeight.bold)),
+              ]),
+              SizedBox(height: 16.h),
+
+              // BUY / SELL toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.card(context),
+                  borderRadius: BorderRadius.circular(12.r),
+                  border: Border.all(color: AppTheme.border(context)),
+                ),
+                child: Row(children: [
+                  Expanded(child: GestureDetector(
+                    onTap: () => setState(() => _type = 'buy'),
+                    child: AnimatedContainer(
+                      duration: 200.ms,
+                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                      decoration: BoxDecoration(
+                        color: _type == 'buy'
+                            ? AppTheme.green.withOpacity(0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10.r),
                       ),
+                      child: Center(child: Text(
+                        lang == 'fa' ? '📈 خرید' : '📈 BUY',
+                        style: TextStyle(
+                          color: _type == 'buy' ? AppTheme.green : AppTheme.textSec(context),
+                          fontSize: 13.sp, fontWeight: FontWeight.bold,
+                        ),
+                      )),
                     ),
-                  ),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _type = 'sell'),
-                      child: AnimatedContainer(
-                        duration: 200.ms,
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
-                        decoration: BoxDecoration(
-                          color: !isBuy
-                              ? AppTheme.red.withOpacity(0.15)
-                              : AppTheme.surface(context),
-                          borderRadius: BorderRadius.circular(10.r),
-                          border: Border.all(
-                              color: !isBuy
-                                  ? AppTheme.red
-                                  : AppTheme.border(context),
-                              width: !isBuy ? 2 : 1),
-                        ),
-                        child: Text(
-                          lang == 'fa' ? '📉 فروش' : '📉 Sell',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: !isBuy
-                                  ? AppTheme.red
-                                  : AppTheme.textSec(context),
-                              fontSize: 14.sp,
-                              fontWeight: !isBuy
-                                  ? FontWeight.bold
-                                  : FontWeight.normal),
-                        ),
+                  )),
+                  Expanded(child: GestureDetector(
+                    onTap: () => setState(() => _type = 'sell'),
+                    child: AnimatedContainer(
+                      duration: 200.ms,
+                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                      decoration: BoxDecoration(
+                        color: _type == 'sell'
+                            ? AppTheme.red.withOpacity(0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10.r),
                       ),
+                      child: Center(child: Text(
+                        lang == 'fa' ? '📉 فروش' : '📉 SELL',
+                        style: TextStyle(
+                          color: _type == 'sell' ? AppTheme.red : AppTheme.textSec(context),
+                          fontSize: 13.sp, fontWeight: FontWeight.bold,
+                        ),
+                      )),
                     ),
-                  ),
-                ],
+                  )),
+                ]),
               ),
               SizedBox(height: 14.h),
 
-              TextFormField(
-                controller: _symbolCtrl,
-                textCapitalization: TextCapitalization.characters,
-                style: TextStyle(
-                    color: AppTheme.text(context), fontSize: 14.sp),
+              // Symbol + Entry
+              Row(children: [
+                Expanded(child: _Field(ctrl: _symbolCtrl,
+                    label: lang == 'fa' ? 'نماد' : 'Symbol',
+                    hint: 'XAUUSD', caps: true)),
+                SizedBox(width: 10.w),
+                Expanded(child: _Field(ctrl: _entryCtrl,
+                    label: lang == 'fa' ? 'قیمت ورود' : 'Entry', numeric: true)),
+              ]),
+              SizedBox(height: 10.h),
+
+              // Lot + SL + TP
+              Row(children: [
+                Expanded(child: _Field(ctrl: _lotCtrl,
+                    label: lang == 'fa' ? 'حجم (Lot)' : 'Lot Size', numeric: true)),
+                SizedBox(width: 10.w),
+                Expanded(child: _Field(ctrl: _slCtrl,
+                    label: 'Stop Loss', numeric: true, optional: true)),
+                SizedBox(width: 10.w),
+                Expanded(child: _Field(ctrl: _tpCtrl,
+                    label: 'Take Profit', numeric: true, optional: true)),
+              ]),
+              SizedBox(height: 10.h),
+
+              // Notes
+              TextField(
+                controller: _notesCtrl,
+                maxLines: 2,
+                style: TextStyle(color: AppTheme.text(context), fontSize: 13.sp),
                 decoration: InputDecoration(
-                  labelText: lang == 'fa' ? 'نماد' : 'Symbol',
-                  hintText: 'EURUSD',
-                  prefixIcon: Icon(Icons.currency_exchange,
+                  labelText: lang == 'fa' ? 'توضیحات (اختیاری)' : 'Notes (optional)',
+                  prefixIcon: Icon(Icons.notes_rounded,
                       color: AppTheme.primary, size: 18.sp),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? (lang == 'fa' ? 'نماد را وارد کنید' : 'Enter symbol')
-                    : null,
               ),
               SizedBox(height: 12.h),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _entryCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      textDirection: TextDirection.ltr,
-                      style: TextStyle(
-                          color: AppTheme.text(context), fontSize: 14.sp),
-                      decoration: InputDecoration(
-                        labelText: lang == 'fa' ? 'ورود' : 'Entry',
-                        prefixIcon: Icon(Icons.login,
-                            color: AppTheme.primary, size: 18.sp),
+              // عکس چارت
+              Row(children: [
+                Expanded(child: GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 60.h,
+                    decoration: BoxDecoration(
+                      color: _imageFile != null
+                          ? AppTheme.green.withOpacity(0.1)
+                          : AppTheme.card(context),
+                      borderRadius: BorderRadius.circular(12.r),
+                      border: Border.all(
+                        color: _imageFile != null
+                            ? AppTheme.green : AppTheme.border(context),
+                        style: BorderStyle.solid,
                       ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return lang == 'fa' ? 'الزامی' : 'Required';
-                        }
-                        if (double.tryParse(v) == null) {
-                          return lang == 'fa' ? 'عدد وارد کنید' : 'Invalid';
-                        }
-                        return null;
-                      },
                     ),
+                    child: _imageFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(11.r),
+                            child: Image.file(_imageFile!, fit: BoxFit.cover))
+                        : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Icon(Icons.add_photo_alternate_outlined,
+                                color: AppTheme.textSec(context), size: 22.sp),
+                            Text(
+                              lang == 'fa' ? 'عکس چارت' : 'Chart Image',
+                              style: TextStyle(color: AppTheme.textSec(context),
+                                  fontSize: 11.sp),
+                            ),
+                          ]),
                   ),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _exitCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      textDirection: TextDirection.ltr,
-                      style: TextStyle(
-                          color: AppTheme.text(context), fontSize: 14.sp),
-                      decoration: InputDecoration(
-                        labelText: lang == 'fa'
-                            ? 'خروج (اختیاری)'
-                            : 'Exit (optional)',
-                        prefixIcon: Icon(Icons.logout,
-                            color: AppTheme.primary, size: 18.sp),
+                )),
+                if (_imageFile != null) ...[
+                  SizedBox(width: 8.w),
+                  GestureDetector(
+                    onTap: () => setState(() => _imageFile = null),
+                    child: Container(
+                      width: 36.w, height: 36.w,
+                      decoration: BoxDecoration(
+                        color: AppTheme.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8.r),
                       ),
+                      child: Icon(Icons.close_rounded, color: AppTheme.red, size: 18.sp),
                     ),
                   ),
                 ],
-              ),
-              SizedBox(height: 12.h),
+              ]),
 
-              TextFormField(
-                controller: _lotCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                textDirection: TextDirection.ltr,
-                style: TextStyle(
-                    color: AppTheme.text(context), fontSize: 14.sp),
-                decoration: InputDecoration(
-                  labelText: lang == 'fa' ? 'سایز لات' : 'Lot Size',
-                  prefixIcon: Icon(Icons.bar_chart,
-                      color: AppTheme.primary, size: 18.sp),
+              if (!GoogleDriveService.instance.isSignedIn && _imageFile != null)
+                Padding(
+                  padding: EdgeInsets.only(top: 6.h),
+                  child: Text(
+                    lang == 'fa'
+                        ? '⚠️ برای ذخیره عکس در Google Drive وارد شوید'
+                        : '⚠️ Sign in to Google Drive to save the image',
+                    style: TextStyle(color: AppTheme.orange, fontSize: 10.sp),
+                  ),
                 ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return lang == 'fa' ? 'الزامی' : 'Required';
-                  }
-                  if (double.tryParse(v) == null) {
-                    return lang == 'fa' ? 'عدد وارد کنید' : 'Invalid';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 12.h),
 
-              TextFormField(
-                controller: _notesCtrl,
-                maxLines: 2,
-                style: TextStyle(
-                    color: AppTheme.text(context), fontSize: 14.sp),
-                decoration: InputDecoration(
-                  labelText: lang == 'fa'
-                      ? 'یادداشت (اختیاری)'
-                      : 'Notes (optional)',
-                  prefixIcon: Icon(Icons.notes,
-                      color: AppTheme.primary, size: 18.sp),
+              SizedBox(height: 18.h),
+
+              // دکمه ثبت
+              ElevatedButton(
+                onPressed: _uploading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.green,
+                  minimumSize: Size(double.infinity, 50.h),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.r)),
                 ),
+                child: _uploading
+                    ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        SizedBox(width: 18.w, height: 18.w,
+                            child: const CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2)),
+                        SizedBox(width: 10.w),
+                        Text(lang == 'fa' ? 'در حال آپلود...' : 'Uploading...',
+                            style: TextStyle(fontSize: 13.sp)),
+                      ])
+                    : Text(
+                        lang == 'fa' ? 'ثبت معامله' : 'Save Trade',
+                        style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+                      ),
               ),
-              SizedBox(height: 20.h),
-
-              ElevatedButton.icon(
-                onPressed: _save,
-                icon: Icon(Icons.save_rounded, size: 18.sp),
-                label: Text(lang == 'fa' ? 'ذخیره معامله' : 'Save Trade'),
-              ),
-              SizedBox(height: 8.h),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  final TextEditingController ctrl;
+  final String label;
+  final String? hint;
+  final bool numeric;
+  final bool optional;
+  final bool caps;
+
+  const _Field({
+    required this.ctrl,
+    required this.label,
+    this.hint,
+    this.numeric = false,
+    this.optional = false,
+    this.caps = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: ctrl,
+      textDirection: TextDirection.ltr,
+      keyboardType: numeric
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.text,
+      textCapitalization: caps ? TextCapitalization.characters : TextCapitalization.none,
+      style: TextStyle(color: AppTheme.text(context), fontSize: 13.sp),
+      decoration: InputDecoration(
+        labelText: label + (optional ? ' *' : ''),
+        hintText: hint,
+        contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
       ),
     );
   }

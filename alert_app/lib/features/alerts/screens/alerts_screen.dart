@@ -10,7 +10,8 @@ import '../widgets/alert_card.dart';
 import '../widgets/price_ticker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../calendar/screens/calendar_screen.dart';
-import '../../calculator/screens/calculator_screen.dart';
+import '../../trades/screens/trades_screen.dart';
+import '../../trades/providers/trade_provider.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/services/api_service.dart';
@@ -92,10 +93,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
             // ── تب ۲: تقویم اقتصادی ───────────────────────────────
             const CalendarScreen(),
-            // ── تب ۳: ماشین حساب ──────────────────────────────────
-            const CalculatorScreen(),
-            // ── تب ۴: پروفایل ─────────────────────────────────────
-            _SettingsTab(
+            // ── تب ۳: معاملات ─────────────────────────────────────
+            const TradesScreen(),
+            // ── تب ۴: پروفایل ─────────────────────────────────────            _SettingsTab(
               lang: lang,
               username: auth.username,
               onLogout: () async {
@@ -177,13 +177,12 @@ class _BottomNav extends StatelessWidget {
                 onTap: () => onTap(2),
               ),
               _NavItem(
-                icon: Icons.calculate_outlined,
-                activeIcon: Icons.calculate_rounded,
-                label: lang == 'fa' ? 'حساب' : 'Calc',
+                icon: Icons.bar_chart_rounded,
+                activeIcon: Icons.bar_chart_rounded,
+                label: lang == 'fa' ? 'معاملات' : 'Trades',
                 active: currentIndex == 3,
                 onTap: () => onTap(3),
-              ),
-              _NavItem(
+              ),              _NavItem(
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: lang == 'fa' ? 'پروفایل' : 'Profile',
@@ -567,6 +566,11 @@ class _SettingsTab extends StatelessWidget {
                   ),
                 ).animate().fadeIn(duration: 200.ms),
 
+                _SettingItem(
+                  icon: Icons.calculate_outlined,
+                  title: lang == 'fa' ? 'ماشین حساب' : 'Calculator',
+                  onTap: () => context.push('/calculator'),
+                ),
                 _SettingItem(
                   icon: Icons.language_rounded,
                   title: AppStrings.t(AppStrings.selectLanguage, lang),

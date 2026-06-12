@@ -1,13 +1,16 @@
 import 'dart:convert';
 
 class TradeModel {
-  final String id;
-  final String symbol;
-  final String type; // buy / sell
-  final double entry;
-  final double? exit;
-  final double lotSize;
-  final String? notes;
+  final String   id;
+  final String   symbol;
+  final String   type;         // buy / sell
+  final double   entry;
+  final double?  exit;
+  final double   lotSize;
+  final double?  stopLoss;
+  final double?  takeProfit;
+  final String?  notes;
+  final String?  imageUrl;     // Google Drive URL
   final DateTime openedAt;
   final DateTime? closedAt;
 
@@ -18,78 +21,80 @@ class TradeModel {
     required this.entry,
     this.exit,
     required this.lotSize,
+    this.stopLoss,
+    this.takeProfit,
     this.notes,
+    this.imageUrl,
     required this.openedAt,
     this.closedAt,
   });
 
-  bool get isClosed => exit != null && closedAt != null;
+  bool get isOpen   => exit == null;
+  bool get isBuy    => type == 'buy';
+  bool get hasSL    => stopLoss != null;
+  bool get hasTP    => takeProfit != null;
+  bool get hasImage => imageUrl != null && imageUrl!.isNotEmpty;
 
-  /// محاسبه سود/ضرر (ساده — فرض pip value = 10 برای جفت‌ارزهای معمولی)
   double? get pnl {
     if (exit == null) return null;
-    final diff = type == 'buy' ? exit! - entry : entry - exit!;
-    // هر pip ≈ 0.0001 برای جفت‌های معمولی / 0.01 برای JPY pairs
-    final pipSize = symbol.toUpperCase().contains('JPY') ? 0.01 : 0.0001;
-    final pips = diff / pipSize;
-    return pips * 10.0 * lotSize;
+    final diff = isBuy ? exit! - entry : entry - exit!;
+    return diff * lotSize * 100; // simplified
   }
 
-  bool get isWin => (pnl ?? 0) > 0;
-
-  factory TradeModel.fromJson(Map<String, dynamic> json) {
-    return TradeModel(
-      id:        json['id']?.toString() ?? '',
-      symbol:    json['symbol']?.toString() ?? '',
-      type:      json['type']?.toString() ?? 'buy',
-      entry:     (json['entry'] as num?)?.toDouble() ?? 0.0,
-      exit:      (json['exit'] as num?)?.toDouble(),
-      lotSize:   (json['lot_size'] as num?)?.toDouble() ?? 0.01,
-      notes:     json['notes']?.toString(),
-      openedAt:  DateTime.tryParse(json['opened_at']?.toString() ?? '') ??
-                 DateTime.now(),
-      closedAt:  json['closed_at'] != null
-                 ? DateTime.tryParse(json['closed_at'].toString())
-                 : null,
-    );
+  double? get riskRewardRatio {
+    if (stopLoss == null || takeProfit == null) return null;
+    final risk   = (entry - stopLoss!).abs();
+    final reward = (takeProfit! - entry).abs();
+    return risk == 0 ? null : reward / risk;
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'symbol': symbol,
-    'type': type,
-    'entry': entry,
-    if (exit != null) 'exit': exit,
-    'lot_size': lotSize,
-    if (notes != null) 'notes': notes,
-    'opened_at': openedAt.toIso8601String(),
-    if (closedAt != null) 'closed_at': closedAt!.toIso8601String(),
+    'id':         id,
+    'symbol':     symbol,
+    'type':       type,
+    'entry':      entry,
+    'exit':       exit,
+    'lotSize':    lotSize,
+    'stopLoss':   stopLoss,
+    'takeProfit': takeProfit,
+    'notes':      notes,
+    'imageUrl':   imageUrl,
+    'openedAt':   openedAt.toIso8601String(),
+    'closedAt':   closedAt?.toIso8601String(),
   };
 
+  factory TradeModel.fromJson(Map<String, dynamic> j) => TradeModel(
+    id:         j['id']     as String,
+    symbol:     j['symbol'] as String,
+    type:       j['type']   as String,
+    entry:      (j['entry'] as num).toDouble(),
+    exit:       j['exit']   != null ? (j['exit'] as num).toDouble() : null,
+    lotSize:    (j['lotSize'] as num).toDouble(),
+    stopLoss:   j['stopLoss']   != null ? (j['stopLoss'] as num).toDouble() : null,
+    takeProfit: j['takeProfit'] != null ? (j['takeProfit'] as num).toDouble() : null,
+    notes:      j['notes']    as String?,
+    imageUrl:   j['imageUrl'] as String?,
+    openedAt:   DateTime.parse(j['openedAt'] as String),
+    closedAt:   j['closedAt'] != null ? DateTime.parse(j['closedAt'] as String) : null,
+  );
+
   TradeModel copyWith({
-    String? id, String? symbol, String? type, double? entry,
-    double? exit, double? lotSize, String? notes,
-    DateTime? openedAt, DateTime? closedAt,
-  }) {
-    return TradeModel(
-      id: id ?? this.id,
-      symbol: symbol ?? this.symbol,
-      type: type ?? this.type,
-      entry: entry ?? this.entry,
-      exit: exit ?? this.exit,
-      lotSize: lotSize ?? this.lotSize,
-      notes: notes ?? this.notes,
-      openedAt: openedAt ?? this.openedAt,
-      closedAt: closedAt ?? this.closedAt,
+    double? exit,
+    String? notes,
+    String? imageUrl,
+    DateTime? closedAt,
+    double? stopLoss,
+    double? takeProfit,
+  }) =>
+    TradeModel(
+      id: id, symbol: symbol, type: type,
+      entry: entry, lotSize: lotSize,
+      exit:       exit       ?? this.exit,
+      stopLoss:   stopLoss   ?? this.stopLoss,
+      takeProfit: takeProfit ?? this.takeProfit,
+      notes:      notes      ?? this.notes,
+      imageUrl:   imageUrl   ?? this.imageUrl,
+      openedAt:   openedAt,
+      closedAt:   closedAt   ?? this.closedAt,
     );
-  }
-
-  static List<TradeModel> listFromJson(String jsonStr) {
-    final list = jsonDecode(jsonStr) as List;
-    return list.map((e) => TradeModel.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  static String listToJson(List<TradeModel> trades) {
-    return jsonEncode(trades.map((t) => t.toJson()).toList());
-  }
 }
