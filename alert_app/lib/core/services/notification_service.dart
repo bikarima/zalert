@@ -199,6 +199,8 @@ class NotificationService {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'calendar:$id',
     );
     debugPrint('[Calendar Notif] Scheduled: $title @ $tzNotifTime');
