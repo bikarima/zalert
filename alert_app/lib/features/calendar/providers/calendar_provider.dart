@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import '../models/calendar_filter.dart';
 import '../../../core/models/calendar_event_model.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/notification_service.dart';
@@ -11,18 +12,15 @@ class CalendarProvider extends ChangeNotifier {
   CalendarStatus _status  = CalendarStatus.idle;
   String? _error;
   String  _week           = 'thisweek';
-  String? _filterImpact;
-  String? _filterCurrency;
   String? _userTimezone;
+  CalendarFilter _filter  = CalendarFilter.defaultFilter;
 
-  List<CalendarEventModel> get events         => _filtered();
-  CalendarStatus           get status         => _status;
-  String?                  get error          => _error;
-  String                   get week           => _week;
-  String?                  get filterImpact   => _filterImpact;
-  String?                  get filterCurrency => _filterCurrency;
+  List<CalendarEventModel> get events  => _filtered();
+  CalendarStatus           get status  => _status;
+  String?                  get error   => _error;
+  String                   get week    => _week;
+  CalendarFilter           get filter  => _filter;
 
-  // رویداد high impact بعدی که هنوز نگذشته
   CalendarEventModel? get nextHighImpact {
     final highs = _events
         .where((e) => e.isHighImpact && e.timeUntil != null)
@@ -31,17 +29,8 @@ class CalendarProvider extends ChangeNotifier {
     return highs.isEmpty ? null : highs.first;
   }
 
-  List<CalendarEventModel> _filtered() {
-    var list = _events;
-    if (_filterImpact != null) {
-      list = list.where((e) => e.impact == _filterImpact).toList();
-    }
-    if (_filterCurrency != null) {
-      list = list.where((e) =>
-          e.currency.toUpperCase() == _filterCurrency!.toUpperCase()).toList();
-    }
-    return list;
-  }
+  List<CalendarEventModel> _filtered() =>
+      _events.where((e) => _filter.matches(e.impact, e.currency)).toList();
 
   Future<void> load({String week = 'thisweek', bool todayOnly = false}) async {
     _week   = week;
@@ -49,19 +38,16 @@ class CalendarProvider extends ChangeNotifier {
     _error  = null;
     notifyListeners();
 
-    // دریافت timezone کاربر
     _userTimezone ??= await _getTimezone();
 
     try {
       final res = await ApiService.instance.getCalendar(
-        week:     week,
+        week:      week,
         todayOnly: todayOnly,
-        timezone: _userTimezone,
+        timezone:  _userTimezone,
       );
       _events = res.map((j) => CalendarEventModel.fromJson(j)).toList();
       _status = CalendarStatus.success;
-
-      // زمان‌بندی نوتیف برای اخبار مهم
       await _scheduleHighImpactNotifications();
     } catch (e) {
       _error  = e.toString();
@@ -70,22 +56,25 @@ class CalendarProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _scheduleHighImpactNotifications() async {
-    // اول همه نوتیف‌های قبلی تقویم رو لغو کن
-    await NotificationService.instance.cancelAllCalendarNotifications();
+  void applyFilter(CalendarFilter filter) {
+    _filter = filter;
+    notifyListeners();
+  }
 
-    // بعد برای هر خبر مهم که هنوز نگذشته نوتیف بزار
+  void resetFilter() {
+    _filter = CalendarFilter.defaultFilter;
+    notifyListeners();
+  }
+
+  Future<void> _scheduleHighImpactNotifications() async {
+    await NotificationService.instance.cancelAllCalendarNotifications();
     final highEvents = _events
         .where((e) => e.isHighImpact && e.eventTimeUtc != null)
         .toList();
-
     for (final event in highEvents) {
       final utcTime = event.eventTimeUtc!;
       final now     = DateTime.now().toUtc();
-
-      // فقط اگه بیش از 10 دقیقه مونده
       if (utcTime.difference(now).inMinutes > 10) {
-        // از hash id استفاده میکنیم
         final notifId = (event.id + event.title).hashCode.abs() % 100000;
         await NotificationService.instance.scheduleCalendarNotification(
           id:        notifId,
@@ -104,21 +93,5 @@ class CalendarProvider extends ChangeNotifier {
     } catch (_) {
       return 'Asia/Tehran';
     }
-  }
-
-  void setImpactFilter(String? impact) {
-    _filterImpact = impact;
-    notifyListeners();
-  }
-
-  void setCurrencyFilter(String? currency) {
-    _filterCurrency = currency;
-    notifyListeners();
-  }
-
-  void clearFilters() {
-    _filterImpact   = null;
-    _filterCurrency = null;
-    notifyListeners();
   }
 }

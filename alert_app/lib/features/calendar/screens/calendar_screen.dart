@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
+import '../widgets/calendar_filter_sheet.dart';
 import '../../../core/models/calendar_event_model.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -56,19 +57,40 @@ class _CalendarScreenState extends State<CalendarScreen>
             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
           ),
           actions: [
-            // فیلتر impact
-            PopupMenuButton<String?>(
-              icon: Icon(Icons.filter_list_rounded,
-                  color: provider.filterImpact != null
-                      ? AppTheme.primary : AppTheme.textSec(context),
-                  size: 20.sp),
-              onSelected: provider.setImpactFilter,
-              itemBuilder: (_) => [
-                PopupMenuItem(value: null,
-                    child: Text(lang == 'fa' ? 'همه' : 'All')),
-                const PopupMenuItem(value: 'high',   child: Text('🔴 High')),
-                const PopupMenuItem(value: 'medium', child: Text('🟠 Medium')),
-                const PopupMenuItem(value: 'low',    child: Text('🟡 Low')),
+            // دکمه فیلتر
+            Stack(
+              alignment: Alignment.topRight,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.filter_list_rounded,
+                      color: !provider.filter.isDefault
+                          ? AppTheme.primary
+                          : AppTheme.textSec(context),
+                      size: 22.sp),
+                  onPressed: () async {
+                    final result = await showModalBottomSheet<CalendarFilter>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => CalendarFilterSheet(
+                        initial: provider.filter,
+                        lang: lang,
+                      ),
+                    );
+                    if (result != null) {
+                      provider.applyFilter(result);
+                    }
+                  },
+                ),
+                if (!provider.filter.isDefault)
+                  Positioned(
+                    top: 8.h, right: 8.w,
+                    child: Container(
+                      width: 8.w, height: 8.w,
+                      decoration: const BoxDecoration(
+                          color: AppTheme.red, shape: BoxShape.circle),
+                    ),
+                  ),
               ],
             ),
             IconButton(
