@@ -75,11 +75,27 @@ async def fetch_calendar(week: str = 'thisweek',
     tz     = _get_tz(user_tz)
     events = _parse_events(raw_cached, tz)
 
-    # فقط امروز و روزهای بعد
-    today  = datetime.now(tz).date()
-    events = [e for e in events if e['date'] >= today.strftime('%Y-%m-%d')]
+    # فقط امروز و بعد + ساعت‌های نگذشته
+    now_local = datetime.now(tz)
+    today_str = now_local.strftime('%Y-%m-%d')
 
-    return events
+    filtered = []
+    for e in events:
+        if e['date'] < today_str:
+            continue  # روزهای گذشته حذف
+        if e['date'] == today_str and e['time_utc']:
+            # رویداد امروزه — چک کن ساعتش گذشته یا نه
+            try:
+                from dateutil import parser as dp
+                event_utc = dp.parse(e['time_utc']).replace(tzinfo=pytz.utc)
+                # 30 دقیقه grace period — اخبار تا 30 دقیقه بعد از ساعتشون نشون داده میشن
+                if event_utc < now_local.astimezone(pytz.utc) - timedelta(minutes=30):
+                    continue
+            except Exception:
+                pass  # اگه parse نشد نشونش بده
+        filtered.append(e)
+
+    return filtered
 
 
 def _parse_events(raw: List[Dict], tz: pytz.BaseTzInfo) -> List[Dict]:
