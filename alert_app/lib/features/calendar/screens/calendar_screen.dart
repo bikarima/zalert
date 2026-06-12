@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
+import '../models/calendar_filter.dart';
 import '../widgets/calendar_filter_sheet.dart';
 import '../../../core/models/calendar_event_model.dart';
 import '../../../core/l10n/locale_provider.dart';
