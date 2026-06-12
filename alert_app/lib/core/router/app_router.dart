@@ -9,6 +9,9 @@ import '../../features/alerts/screens/alerts_screen.dart';
 import '../../features/alerts/screens/add_alert_screen.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/language/screens/language_screen.dart';
+import '../../features/calculator/screens/calculator_screen.dart';
+import '../../features/trades/screens/trades_screen.dart';
+import '../../features/announcements/screens/announcements_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -32,12 +35,15 @@ class AppRouter {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash',     builder: (_, __) => const _SplashScreen()),
-      GoRoute(path: '/language',   builder: (_, __) => const LanguageScreen()),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-      GoRoute(path: '/login',      builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/alerts',     builder: (_, __) => const AlertsScreen()),
-      GoRoute(path: '/add-alert',  builder: (_, __) => const AddAlertScreen()),
+      GoRoute(path: '/splash',          builder: (_, __) => const _SplashScreen()),
+      GoRoute(path: '/language',        builder: (_, __) => const LanguageScreen()),
+      GoRoute(path: '/onboarding',      builder: (_, __) => const OnboardingScreen()),
+      GoRoute(path: '/login',           builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/alerts',          builder: (_, __) => const AlertsScreen()),
+      GoRoute(path: '/add-alert',       builder: (_, __) => const AddAlertScreen()),
+      GoRoute(path: '/calculator',      builder: (_, __) => const CalculatorScreen()),
+      GoRoute(path: '/trades',          builder: (_, __) => const TradesScreen()),
+      GoRoute(path: '/announcements',   builder: (_, __) => const AnnouncementsScreen()),
     ],
   );
 }

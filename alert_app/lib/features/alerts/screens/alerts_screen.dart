@@ -10,8 +10,11 @@ import '../widgets/alert_card.dart';
 import '../widgets/price_ticker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../calendar/screens/calendar_screen.dart';
+import '../../calculator/screens/calculator_screen.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 
@@ -23,17 +26,33 @@ class AlertsScreen extends StatefulWidget {
 
 class _AlertsScreenState extends State<AlertsScreen> {
   int _currentTab = 0;
+  int _unreadAnnouncements = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+      _checkUnreadAnnouncements();
+    });
   }
 
   void _loadData() {
     final userId = context.read<AuthProvider>().userId;
     if (userId == null) return;
     context.read<AlertProvider>().loadAlerts(userId, includeTriggered: true);
+  }
+
+  Future<void> _checkUnreadAnnouncements() async {
+    try {
+      final readIds = await StorageService.instance.getReadAnnouncementIds();
+      final raw     = await ApiService.instance.getAnnouncements();
+      final unread  = raw.where((j) {
+        final id = j['id']?.toString() ?? '';
+        return !readIds.contains(id);
+      }).length;
+      if (mounted) setState(() => _unreadAnnouncements = unread);
+    } catch (_) {}
   }
 
   Future<void> _delete(BuildContext ctx, int alertId) async {
@@ -60,6 +79,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
               alerts: provider.activeAlerts,
               loading: provider.status == AlertStatus.loading,
               lang: lang,
+              unreadAnnouncements: _unreadAnnouncements,
               onDelete: (id) => _delete(context, id),
               onRefresh: _loadData,
             ),
@@ -72,7 +92,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
             // ── تب ۲: تقویم اقتصادی ───────────────────────────────
             const CalendarScreen(),
-            // ── تب ۳: پروفایل ─────────────────────────────────────
+            // ── تب ۳: ماشین حساب ──────────────────────────────────
+            const CalculatorScreen(),
+            // ── تب ۴: پروفایل ─────────────────────────────────────
             _SettingsTab(
               lang: lang,
               username: auth.username,
@@ -155,11 +177,18 @@ class _BottomNav extends StatelessWidget {
                 onTap: () => onTap(2),
               ),
               _NavItem(
+                icon: Icons.calculate_outlined,
+                activeIcon: Icons.calculate_rounded,
+                label: lang == 'fa' ? 'حساب' : 'Calc',
+                active: currentIndex == 3,
+                onTap: () => onTap(3),
+              ),
+              _NavItem(
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: lang == 'fa' ? 'پروفایل' : 'Profile',
-                active: currentIndex == 3,
-                onTap: () => onTap(3),
+                active: currentIndex == 4,
+                onTap: () => onTap(4),
               ),
             ],
           ),
@@ -193,7 +222,7 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: 200.ms,
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
         decoration: BoxDecoration(
           color: active ? AppTheme.primary.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(12.r),
@@ -234,11 +263,13 @@ class _ActiveAlertsTab extends StatelessWidget {
   final List alerts;
   final bool loading;
   final String lang;
+  final int unreadAnnouncements;
   final Function(int) onDelete;
   final VoidCallback onRefresh;
 
   const _ActiveAlertsTab({
     required this.alerts, required this.loading, required this.lang,
+    required this.unreadAnnouncements,
     required this.onDelete, required this.onRefresh,
   });
 
@@ -259,6 +290,20 @@ class _ActiveAlertsTab extends StatelessWidget {
                   color: AppTheme.text(context),
                   fontWeight: FontWeight.bold, fontSize: 16.sp)),
           actions: [
+            // دکمه اطلاعیه‌ها
+            IconButton(
+              icon: badges.Badge(
+                showBadge: unreadAnnouncements > 0,
+                badgeContent: Text(
+                  '$unreadAnnouncements',
+                  style: TextStyle(color: Colors.white, fontSize: 9.sp),
+                ),
+                badgeStyle: const badges.BadgeStyle(badgeColor: AppTheme.red),
+                child: Icon(Icons.notifications_outlined,
+                    size: 20.sp, color: AppTheme.text(context)),
+              ),
+              onPressed: () => context.push('/announcements'),
+            ),
             IconButton(
                 icon: Icon(Icons.refresh_rounded, size: 20.sp),
                 onPressed: onRefresh),
@@ -370,6 +415,80 @@ class _SettingsTab extends StatelessWidget {
     required this.onLogout, required this.onChangeLang,
   });
 
+  void _showSyncTelegramDialog(BuildContext context) {
+    final ctrl = TextEditingController();
+    final auth = context.read<AuthProvider>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.card(context),
+        title: Text(
+          lang == 'fa' ? '🔗 Sync با تلگرام' : '🔗 Sync with Telegram',
+          style: TextStyle(
+              color: AppTheme.text(context),
+              fontSize: 16.sp, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              lang == 'fa'
+                  ? 'آیدی عددی تلگرامت رو وارد کن تا حسابت به تلگرام لینک بشه:'
+                  : 'Enter your Telegram numeric ID to link your account:',
+              style: TextStyle(
+                  color: AppTheme.textSec(context), fontSize: 12.sp),
+            ),
+            SizedBox(height: 12.h),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              textDirection: TextDirection.ltr,
+              style: TextStyle(
+                  color: AppTheme.text(context), fontSize: 14.sp),
+              decoration: InputDecoration(
+                labelText: lang == 'fa'
+                    ? 'آیدی عددی تلگرام'
+                    : 'Telegram Numeric ID',
+                hintText: '123456789',
+                prefixIcon: Icon(Icons.telegram,
+                    color: AppTheme.primary, size: 18.sp),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(lang == 'fa' ? 'انصراف' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final id = int.tryParse(ctrl.text.trim());
+              if (id == null) return;
+              Navigator.pop(ctx);
+              final ok = await auth.linkToTelegram(id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                    ok
+                        ? (lang == 'fa'
+                            ? '✅ با موفقیت به تلگرام لینک شد'
+                            : '✅ Successfully linked to Telegram')
+                        : (auth.error ?? 'Error'),
+                  ),
+                  backgroundColor: ok ? AppTheme.green : AppTheme.red,
+                ));
+              }
+            },
+            child: Text(lang == 'fa' ? 'لینک کن' : 'Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isRtl         = lang == 'fa';
@@ -453,6 +572,23 @@ class _SettingsTab extends StatelessWidget {
                   title: AppStrings.t(AppStrings.selectLanguage, lang),
                   onTap: onChangeLang,
                 ),
+
+                // لینک تلگرام
+                _SettingItem(
+                  icon: Icons.link_rounded,
+                  title: lang == 'fa'
+                      ? '🔗 Sync با تلگرام'
+                      : '🔗 Sync with Telegram',
+                  onTap: () => _showSyncTelegramDialog(context),
+                ),
+
+                // معاملات
+                _SettingItem(
+                  icon: Icons.receipt_long_outlined,
+                  title: lang == 'fa' ? '📊 معاملات من' : '📊 My Trades',
+                  onTap: () => context.push('/trades'),
+                ),
+
                 _SettingItem(
                   icon: Icons.logout_rounded,
                   title: AppStrings.t(AppStrings.logout, lang),

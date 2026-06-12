@@ -138,4 +138,11 @@ class ApiService {
       },
     );
   }
+
+  // ── Announcements ──────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getAnnouncements() async {
+    final res = await _dio.get('/announcements');
+    return (res.data as List).cast<Map<String, dynamic>>();
+  }
 }
