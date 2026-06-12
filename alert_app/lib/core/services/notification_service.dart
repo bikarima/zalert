@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 
@@ -104,44 +105,42 @@ class NotificationService {
     final n = message.notification;
     if (n == null) return;
 
-    final isTriggered =
-        message.data['type'] == 'alert_triggered';
+    final isTriggered = message.data['type'] == 'alert_triggered';
     final symbol = message.data['symbol'] ?? '';
+    final channelId   = isTriggered ? _channelTriggered.id   : _channelAlerts.id;
+    final channelName = isTriggered ? _channelTriggered.name : _channelAlerts.name;
+    final ledColor    = isTriggered ? const Color(0xFF00E676) : const Color(0xFF6C63FF);
+
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
+      color: ledColor,
+      icon: '@mipmap/ic_launcher',
+      actions: isTriggered
+          ? const [
+              AndroidNotificationAction(
+                'view_alert',
+                'مشاهده',
+                showsUserInterface: true,
+                cancelNotification: true,
+              ),
+            ]
+          : null,
+      styleInformation: BigTextStyleInformation(
+        n.body ?? '',
+        summaryText: symbol,
+      ),
+    );
 
     await _localNotif.show(
       message.hashCode,
       n.title ?? '🔔 Alert',
       n.body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          isTriggered ? _channelTriggered.id : _channelAlerts.id,
-          isTriggered ? _channelTriggered.name : _channelAlerts.name,
-          importance: Importance.max,
-          priority: Priority.max,
-          playSound: true,
-          enableVibration: true,
-          // رنگ متفاوت برای triggered
-          color: isTriggered
-              ? const Color(0xFF00E676)
-              : const Color(0xFF6C63FF),
-          icon: '@mipmap/ic_launcher',
-          // action button
-          actions: isTriggered
-              ? [
-                  const AndroidNotificationAction(
-                    'view_alert',
-                    'مشاهده',
-                    showsUserInterface: true,
-                    cancelNotification: true,
-                  ),
-                ]
-              : null,
-          styleInformation: BigTextStyleInformation(
-            n.body ?? '',
-            summaryText: symbol,
-          ),
-        ),
-      ),
+      NotificationDetails(android: androidDetails),
       payload: message.data.toString(),
     );
   }
