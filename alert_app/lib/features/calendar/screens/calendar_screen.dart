@@ -181,19 +181,19 @@ class _EventCard extends StatelessWidget {
 
   const _EventCard({required this.event, required this.lang});
 
-  Color _impactColor() {
-    switch (event.impact) {
+  Color _impactColor(BuildContext context) {
+    switch (impact) {
       case 'high':    return AppTheme.red;
       case 'medium':  return AppTheme.orange;
       case 'low':     return const Color(0xFFFFEB3B);
       case 'holiday': return AppTheme.blue;
-      default:        return AppTheme.textSec(null as BuildContext);
+      default:        return AppTheme.textSec(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final impactColor = _impactColor();
+    final impactColor = _impactColor(context);
 
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 3.h),

@@ -44,7 +44,7 @@ class CalendarProvider extends ChangeNotifier {
         week: week,
         todayOnly: todayOnly,
       );
-      _events = res;
+      _events = res.map((j) => CalendarEventModel.fromJson(j)).toList();
       _status = CalendarStatus.success;
     } catch (e) {
       _error  = e.toString();

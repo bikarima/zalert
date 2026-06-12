@@ -97,7 +97,7 @@ class ApiService {
 
   // ── Calendar ───────────────────────────────────────────────────────
 
-  Future<List<dynamic>> getCalendar({
+  Future<List<Map<String, dynamic>>> getCalendar({
     String week = 'thisweek',
     String? impact,
     String? currency,
@@ -109,7 +109,7 @@ class ApiService {
       if (currency != null) 'currency': currency,
       if (todayOnly) 'today_only': true,
     });
-    return res.data as List;
+    return (res.data as List).cast<Map<String, dynamic>>();
   }
 
   Future<List<dynamic>> getDevices(int userId) async {
