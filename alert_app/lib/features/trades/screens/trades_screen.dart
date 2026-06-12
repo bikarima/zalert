@@ -231,7 +231,7 @@ class _TradesScreenState extends State<TradesScreen>
 
 class _DriveLoginGate extends StatefulWidget {
   final String lang;
-  final VoidCallback onSignIn;
+  final Future<void> Function() onSignIn;
   const _DriveLoginGate({required this.lang, required this.onSignIn});
 
   @override
