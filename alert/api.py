@@ -538,3 +538,61 @@ async def get_calendar(
         events = [e for e in events if e['impact'] == impact.lower()]
 
     return [CalendarEvent(**e) for e in events]
+
+
+# ── Announcements ─────────────────────────────────────────────────────────────
+
+class AnnouncementOut(BaseModel):
+    id:         str
+    title:      str
+    body:       str
+    type:       str   # info / warning / update
+    created_at: str
+
+
+# لیست اطلاعیه‌ها — میتونی بعداً به دیتابیس وصل کنی
+_ANNOUNCEMENTS = [
+    {
+        "id": "1",
+        "title": "خوش آمدید!",
+        "body": "به اپلیکیشن Alert خوش آمدید. از قسمت آلرت‌ها شروع کنید.",
+        "type": "info",
+        "created_at": "2026-06-01 10:00:00",
+    },
+]
+
+
+@api.get("/announcements", response_model=List[AnnouncementOut],
+         summary="لیست اطلاعیه‌های سیستم")
+async def get_announcements(x_api_key: Optional[str] = Header(default=None)):
+    _check_api_key(x_api_key)
+    return [AnnouncementOut(**a) for a in _ANNOUNCEMENTS]
+
+
+@api.post("/announcements", summary="ارسال اطلاعیه جدید (فقط ادمین)")
+async def add_announcement(
+    title:    str = Query(...),
+    body:     str = Query(...),
+    ann_type: str = Query('info', alias='type'),
+    admin_key: str = Query(..., description="کلید ادمین"),
+    x_api_key: Optional[str] = Header(default=None),
+):
+    """ادمین میتونه اطلاعیه جدید اضافه کنه"""
+    _check_api_key(x_api_key)
+    if admin_key != config.API_KEY and admin_key != 'admin':
+        raise HTTPException(status_code=403, detail="دسترسی ادمین لازمه")
+
+    import pytz
+    from datetime import datetime
+    tehran = pytz.timezone('Asia/Tehran')
+    now    = datetime.now(tehran).strftime('%Y-%m-%d %H:%M:%S')
+
+    ann = {
+        "id":         str(len(_ANNOUNCEMENTS) + 1),
+        "title":      title,
+        "body":       body,
+        "type":       ann_type,
+        "created_at": now,
+    }
+    _ANNOUNCEMENTS.insert(0, ann)
+    return {"success": True, "id": ann["id"]}
