@@ -100,7 +100,7 @@ class CalendarProvider extends ChangeNotifier {
   Future<String?> _getTimezone() async {
     try {
       final tzInfo = await FlutterTimezone.getLocalTimezone();
-      return tzInfo.name;
+      return tzInfo.identifier;
     } catch (_) {
       return 'Asia/Tehran';
     }
