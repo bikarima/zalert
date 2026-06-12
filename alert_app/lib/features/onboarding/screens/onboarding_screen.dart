@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,6 @@ import '../../../core/theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
-
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
@@ -17,7 +17,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _page = 0;
 
-  // آیکون‌های هر اسلاید
   final _icons = [
     Icons.notifications_active_outlined,
     Icons.candlestick_chart_outlined,
@@ -44,90 +43,70 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = context.watch<LocaleProvider>().lang;
-    final items = AppStrings.onboarding;
+    final lang   = context.watch<LocaleProvider>().lang;
+    final items  = AppStrings.onboarding;
     final isLast = _page == items.length - 1;
 
     return Scaffold(
+      backgroundColor: AppTheme.bg(context),
       body: SafeArea(
         child: Column(
           children: [
-            // دکمه Skip
             Align(
-              alignment: lang == 'fa'
-                  ? Alignment.topLeft
-                  : Alignment.topRight,
+              alignment: lang == 'fa' ? Alignment.topLeft : Alignment.topRight,
               child: TextButton(
                 onPressed: _finish,
-                child: Text(
-                  AppStrings.t(AppStrings.skip, lang),
-                  style: const TextStyle(color: AppTheme.textSecond),
-                ),
+                child: Text(AppStrings.t(AppStrings.skip, lang),
+                    style: TextStyle(
+                        color: AppTheme.textSec(context), fontSize: 13.sp)),
               ),
             ),
-
-            // صفحات
             Expanded(
               child: PageView.builder(
                 controller: _controller,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemCount: items.length,
-                itemBuilder: (_, i) {
-                  final item = items[i];
-                  return _OnboardingPage(
-                    icon: _icons[i],
-                    gradientColors: _gradients[i],
-                    title: AppStrings.t(item['title']!, lang),
-                    desc: AppStrings.t(item['desc']!, lang),
-                    isRtl: lang == 'fa',
-                  );
-                },
-              ),
-            ),
-
-            // اندیکاتور
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                items.length,
-                (i) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: _page == i ? 24 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _page == i
-                        ? AppTheme.primary
-                        : AppTheme.divider,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+                itemBuilder: (_, i) => _OnboardingPage(
+                  icon: _icons[i],
+                  gradientColors: _gradients[i],
+                  title: AppStrings.t(items[i]['title']!, lang),
+                  desc: AppStrings.t(items[i]['desc']!, lang),
+                  isRtl: lang == 'fa',
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-
-            // دکمه بعدی / شروع
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(items.length, (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: EdgeInsets.symmetric(horizontal: 4.w),
+                width: _page == i ? 22.w : 7.w,
+                height: 7.h,
+                decoration: BoxDecoration(
+                  color: _page == i ? AppTheme.primary : AppTheme.border(context),
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              )),
+            ),
+            SizedBox(height: 28.h),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: EdgeInsets.symmetric(horizontal: 28.w),
               child: ElevatedButton(
                 onPressed: () {
                   if (isLast) {
                     _finish();
                   } else {
                     _controller.nextPage(
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOut,
-                    );
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut);
                   }
                 },
-                child: Text(
-                  isLast
-                      ? AppStrings.t(AppStrings.getStarted, lang)
-                      : AppStrings.t(AppStrings.next, lang),
-                ),
+                child: Text(isLast
+                    ? AppStrings.t(AppStrings.getStarted, lang)
+                    : AppStrings.t(AppStrings.next, lang)),
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 28.h),
           ],
         ),
       ),
@@ -143,11 +122,8 @@ class _OnboardingPage extends StatelessWidget {
   final bool isRtl;
 
   const _OnboardingPage({
-    required this.icon,
-    required this.gradientColors,
-    required this.title,
-    required this.desc,
-    required this.isRtl,
+    required this.icon, required this.gradientColors,
+    required this.title, required this.desc, required this.isRtl,
   });
 
   @override
@@ -155,52 +131,34 @@ class _OnboardingPage extends StatelessWidget {
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.symmetric(horizontal: 28.w),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // دایره گرادیانت با آیکون
             Container(
-              width: 160,
-              height: 160,
+              width: 140.w, height: 140.w,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
                   colors: gradientColors,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: gradientColors[0].withOpacity(0.4),
-                    blurRadius: 40,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
+                boxShadow: [BoxShadow(
+                  color: gradientColors[0].withOpacity(0.4),
+                  blurRadius: 32.r, offset: const Offset(0, 14),
+                )],
               ),
-              child: Icon(icon, size: 70, color: Colors.white),
+              child: Icon(icon, size: 60.sp, color: Colors.white),
             ),
-            const SizedBox(height: 48),
-
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              desc,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppTheme.textSecond,
-                height: 1.7,
-              ),
-            ),
+            SizedBox(height: 40.h),
+            Text(title, textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 20.sp, fontWeight: FontWeight.bold,
+                    color: AppTheme.text(context))),
+            SizedBox(height: 14.h),
+            Text(desc, textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13.sp, color: AppTheme.textSec(context), height: 1.7)),
           ],
         ),
       ),

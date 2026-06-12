@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../core/models/alert_model.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -22,137 +23,110 @@ class AlertCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAbove  = alert.isAbove;
     final dirColor = isAbove ? AppTheme.green : AppTheme.red;
-    final dirIcon  = isAbove
-        ? Icons.arrow_upward_rounded
-        : Icons.arrow_downward_rounded;
+    final dirIcon  = isAbove ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+    final cardBg   = AppTheme.card(context);
+    final borderC  = isTriggered
+        ? AppTheme.green.withOpacity(0.4)
+        : AppTheme.border(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
       decoration: BoxDecoration(
-        color: AppTheme.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isTriggered
-              ? AppTheme.green.withOpacity(0.4)
-              : AppTheme.border,
-        ),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: borderC),
         boxShadow: isTriggered
-            ? [
-                BoxShadow(
-                  color: AppTheme.green.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                )
-              ]
+            ? [BoxShadow(
+                color: AppTheme.green.withOpacity(0.08),
+                blurRadius: 10.r, offset: const Offset(0, 4))]
             : null,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(12.w),
         child: Row(
           children: [
-            // ── آیکون جهت ─────────────────────────────────────────
+            // آیکون جهت
             Container(
-              width: 48,
-              height: 48,
+              width: 42.w, height: 42.w,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    dirColor.withOpacity(0.2),
-                    dirColor.withOpacity(0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [dirColor.withOpacity(0.2), dirColor.withOpacity(0.05)],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
                 shape: BoxShape.circle,
                 border: Border.all(color: dirColor.withOpacity(0.3)),
               ),
-              child: Icon(dirIcon, color: dirColor, size: 22),
+              child: Icon(dirIcon, color: dirColor, size: 18.sp),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: 10.w),
 
-            // ── اطلاعات ────────────────────────────────────────────
+            // اطلاعات
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        alert.symbol,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
+                  Row(children: [
+                    Text(alert.symbol,
+                        style: TextStyle(
+                            color: AppTheme.text(context),
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5)),
+                    SizedBox(width: 6.w),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                      decoration: BoxDecoration(
+                        color: dirColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(color: dirColor.withOpacity(0.3)),
                       ),
-                      const SizedBox(width: 8),
+                      child: Text(alert.direction,
+                          style: TextStyle(color: dirColor,
+                              fontSize: 9.sp, fontWeight: FontWeight.w600)),
+                    ),
+                    if (isTriggered) ...[
+                      SizedBox(width: 4.w),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                        padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                         decoration: BoxDecoration(
-                          color: dirColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: dirColor.withOpacity(0.3)),
+                          color: AppTheme.green.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(16.r),
                         ),
-                        child: Text(
-                          alert.direction,
-                          style: TextStyle(
-                              color: dirColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      if (isTriggered) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.green.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            '✓ Hit',
-                            style: TextStyle(
-                                color: AppTheme.green,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _InfoChip(
-                        icon: Icons.flag_rounded,
-                        label:
-                            '${AppStrings.t(AppStrings.target, lang)}: ${_formatPrice(alert.targetPrice)}',
-                        color: AppTheme.primary,
+                        child: Text('✓ Hit',
+                            style: TextStyle(color: AppTheme.green,
+                                fontSize: 9.sp, fontWeight: FontWeight.bold)),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 4),
+                  ]),
+                  SizedBox(height: 6.h),
+                  Row(children: [
+                    Icon(Icons.flag_rounded, size: 11.sp, color: AppTheme.primary),
+                    SizedBox(width: 3.w),
+                    Text(
+                      '${AppStrings.t(AppStrings.target, lang)}: ${_fmt(alert.targetPrice)}',
+                      style: TextStyle(
+                          color: AppTheme.primary.withOpacity(0.9),
+                          fontSize: 11.sp, fontWeight: FontWeight.w500),
+                    ),
+                  ]),
+                  SizedBox(height: 2.h),
                   Text(
                     isTriggered && alert.triggeredAt != null
-                        ? alert.triggeredAt!
-                        : alert.createdAt,
-                    style: const TextStyle(
-                        color: AppTheme.textHint, fontSize: 11),
+                        ? alert.triggeredAt! : alert.createdAt,
+                    style: TextStyle(
+                        color: AppTheme.textHint(context), fontSize: 10.sp),
                   ),
                 ],
               ),
             ),
 
-            // ── دکمه حذف ──────────────────────────────────────────
             if (onDelete != null)
               IconButton(
-                icon: const Icon(Icons.delete_outline_rounded,
-                    color: AppTheme.textSecond, size: 20),
+                icon: Icon(Icons.delete_outline_rounded,
+                    color: AppTheme.textSec(context), size: 18.sp),
                 onPressed: onDelete,
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(minWidth: 32.w, minHeight: 32.h),
               ),
           ],
         ),
@@ -160,39 +134,9 @@ class AlertCard extends StatelessWidget {
     );
   }
 
-  String _formatPrice(double price) {
+  String _fmt(double price) {
     if (price >= 1000) return price.toStringAsFixed(2);
     if (price >= 10)   return price.toStringAsFixed(4);
     return price.toStringAsFixed(5);
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-              color: color.withOpacity(0.9),
-              fontSize: 12,
-              fontWeight: FontWeight.w500),
-        ),
-      ],
-    );
   }
 }

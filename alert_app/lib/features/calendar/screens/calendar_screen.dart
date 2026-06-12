@@ -182,7 +182,7 @@ class _EventCard extends StatelessWidget {
   const _EventCard({required this.event, required this.lang});
 
   Color _impactColor(BuildContext context) {
-    switch (impact) {
+    switch (event.impact) {
       case 'high':    return AppTheme.red;
       case 'medium':  return AppTheme.orange;
       case 'low':     return const Color(0xFFFFEB3B);

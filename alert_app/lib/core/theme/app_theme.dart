@@ -47,8 +47,12 @@ class AppTheme {
   static bool _d(BuildContext ctx) =>
       Theme.of(ctx).brightness == Brightness.dark;
 
-  // ── backward compat (برای کدهای قدیمی) ───────────────────────────
+  // ── backward compat (برای کدهای قدیمی که context ندارن) ─────────
   static const Color background  = darkBg;
+  static const Color surface_    = darkSurface;
+  static const Color card_       = darkCard;
+  static const Color border_     = darkBorder;
+  static const Color divider_    = darkDivider;
   static const Color textPrimary = darkText;
   static const Color textSecond  = darkTextSec;
   static const Color textHint_   = darkTextHint;
