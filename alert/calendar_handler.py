@@ -1,6 +1,6 @@
 """
 تقویم اقتصادی از Forex Factory
-فرمت واقعی JSON:
+فرمت JSON:
 {
   "title": "...",
   "country": "USD",
@@ -10,6 +10,7 @@
   "previous": "3.2%",
   "actual": ""
 }
+نکته: FF فقط thisweek JSON داره. برای today_only داده همین هفته فیلتر میشه.
 """
 
 import httpx
@@ -22,10 +23,7 @@ _cache: Dict[str, List[Dict]] = {}
 _cache_time: Dict[str, datetime] = {}
 _CACHE_TTL = timedelta(minutes=30)
 
-FF_URLS = {
-    'thisweek': 'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-    'nextweek': 'https://nfs.faireconomy.media/ff_calendar_nextweek.json',
-}
+FF_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
 
 IMPACT_MAP = {
     'High':         'high',
@@ -37,7 +35,6 @@ IMPACT_MAP = {
 
 
 def _get_tz(user_tz: Optional[str]) -> pytz.BaseTzInfo:
-    """دریافت timezone — اگه invalid بود Tehran"""
     if user_tz:
         try:
             return pytz.timezone(user_tz)
@@ -48,11 +45,10 @@ def _get_tz(user_tz: Optional[str]) -> pytz.BaseTzInfo:
 
 async def fetch_calendar(week: str = 'thisweek',
                          user_tz: Optional[str] = None) -> List[Dict]:
-    """دریافت تقویم اقتصادی با cache (cache بدون timezone، تبدیل موقع برگشت)"""
-    now = datetime.utcnow()
+    """دریافت تقویم هفته جاری با cache"""
+    now       = datetime.utcnow()
+    cache_key = 'thisweek'  # FF فقط thisweek داره
 
-    # cache raw data (timezone-agnostic)
-    cache_key = week
     if (
         cache_key in _cache
         and cache_key in _cache_time
@@ -60,11 +56,10 @@ async def fetch_calendar(week: str = 'thisweek',
     ):
         raw_cached = _cache[cache_key]
     else:
-        url = FF_URLS.get(week, FF_URLS['thisweek'])
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
-                    url,
+                    FF_URL,
                     headers={'User-Agent': 'Mozilla/5.0'},
                     follow_redirects=True,
                 )
@@ -77,11 +72,11 @@ async def fetch_calendar(week: str = 'thisweek',
         _cache[cache_key]      = raw_cached
         _cache_time[cache_key] = now
 
-    tz = _get_tz(user_tz)
+    tz     = _get_tz(user_tz)
     events = _parse_events(raw_cached, tz)
 
-    # فقط امروز و روزهای بعد رو برگردون
-    today = datetime.now(tz).date()
+    # فقط امروز و روزهای بعد
+    today  = datetime.now(tz).date()
     events = [e for e in events if e['date'] >= today.strftime('%Y-%m-%d')]
 
     return events
@@ -91,22 +86,19 @@ def _parse_events(raw: List[Dict], tz: pytz.BaseTzInfo) -> List[Dict]:
     events = []
     for item in raw:
         try:
-            date_iso = item.get('date', '')
-            impact   = item.get('impact', '')
-
-            # زمان UTC
-            dt_utc       = None
+            date_iso     = item.get('date', '')
+            impact       = item.get('impact', '')
             date_display = ''
             time_display = 'All Day'
             iso_utc      = ''
 
             if date_iso:
-                dt_parsed   = dateutil_parser.parse(date_iso)
-                dt_utc      = dt_parsed.astimezone(pytz.utc)
-                dt_local    = dt_utc.astimezone(tz)
+                dt_parsed    = dateutil_parser.parse(date_iso)
+                dt_utc       = dt_parsed.astimezone(pytz.utc)
+                dt_local     = dt_utc.astimezone(tz)
                 date_display = dt_local.strftime('%Y-%m-%d')
                 time_display = dt_local.strftime('%H:%M')
-                iso_utc      = dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')  # برای scheduled notif
+                iso_utc      = dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 
             events.append({
                 'id':       item.get('id', date_iso + item.get('title', '')),
@@ -114,7 +106,7 @@ def _parse_events(raw: List[Dict], tz: pytz.BaseTzInfo) -> List[Dict]:
                 'currency': item.get('country', ''),
                 'date':     date_display,
                 'time':     time_display,
-                'time_utc': iso_utc,          # زمان UTC برای flutter
+                'time_utc': iso_utc,
                 'impact':   IMPACT_MAP.get(impact, 'low'),
                 'forecast': item.get('forecast', '') or '',
                 'previous': item.get('previous', '') or '',

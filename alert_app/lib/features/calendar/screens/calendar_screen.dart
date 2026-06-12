@@ -101,10 +101,11 @@ class _CalendarScreenState extends State<CalendarScreen>
           ],
           bottom: TabBar(
             controller: _tabs,
-            onTap: (i) => provider.load(week: i == 0 ? 'thisweek' : 'nextweek'),
+            onTap: (i) => provider.load(week: i == 0 ? 'thisweek' : 'thisweek',
+                todayOnly: i == 1),
             tabs: [
               Tab(text: lang == 'fa' ? 'این هفته' : 'This Week'),
-              Tab(text: lang == 'fa' ? 'هفته آینده' : 'Next Week'),
+              Tab(text: lang == 'fa' ? 'امروز' : 'Today'),
             ],
           ),
         ),
