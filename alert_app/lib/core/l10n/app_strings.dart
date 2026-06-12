@@ -187,3 +187,8 @@ class AppStrings {
   static String t(Map<String, String> map, String lang) =>
       map[lang] ?? map['en'] ?? '';
 }
+
+// extension برای راحتی استفاده
+extension AppStringsExt on String {
+  String tr(String lang) => this;
+}

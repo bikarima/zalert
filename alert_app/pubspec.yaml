@@ -50,8 +50,14 @@ dependencies:
   firebase_messaging: ^15.1.3
   flutter_local_notifications: ^17.2.2
 
-  # Device info (برای نام دستگاه)
+  # Device info
   device_info_plus: ^10.1.2
+
+  # UI
+  flutter_slidable: ^3.1.1
+  cached_network_image: ^3.3.1
+  flutter_animate: ^4.5.0
+  badges: ^3.1.2
 
 dev_dependencies:
   flutter_test:

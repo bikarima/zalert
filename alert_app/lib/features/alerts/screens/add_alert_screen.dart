@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/alert_provider.dart';
@@ -22,6 +23,9 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
   double? _currentPrice;
   String? _resolvedSymbol;
   bool    _fetchingPrice = false;
+
+  // نمادهای پرکاربرد
+  final _quickSymbols = ['XAUUSD', 'EURUSD', 'BTCUSD', 'GBPUSD', 'USDJPY'];
 
   @override
   void dispose() {
@@ -64,7 +68,8 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
       context.pop();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(context.read<AlertProvider>().error ?? 'Error'),
+        content: Text(
+            context.read<AlertProvider>().error ?? 'Error'),
         backgroundColor: AppTheme.red,
       ));
     }
@@ -80,91 +85,137 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        appBar: AppBar(title: Text(s(AppStrings.addAlert, lang))),
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          title: Text(s(AppStrings.addAlert, lang)),
+          backgroundColor: AppTheme.background,
+        ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+                // ── نمادهای سریع ────────────────────────────────
+                Text(
+                  lang == 'fa' ? 'نمادهای محبوب' : 'Popular Symbols',
+                  style: const TextStyle(
+                      color: AppTheme.textSecond, fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 38,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _quickSymbols.length,
+                    itemBuilder: (_, i) => GestureDetector(
+                      onTap: () {
+                        _symbolCtrl.text = _quickSymbols[i];
+                        _fetchPrice();
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _symbolCtrl.text == _quickSymbols[i]
+                              ? AppTheme.primary.withOpacity(0.2)
+                              : AppTheme.card,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _symbolCtrl.text == _quickSymbols[i]
+                                ? AppTheme.primary
+                                : AppTheme.border,
+                          ),
+                        ),
+                        child: Text(
+                          _quickSymbols[i],
+                          style: TextStyle(
+                            color: _symbolCtrl.text == _quickSymbols[i]
+                                ? AppTheme.primary
+                                : AppTheme.textSecond,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ).animate().fadeIn(
+                        duration: 200.ms,
+                        delay: Duration(milliseconds: i * 50)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── نماد ────────────────────────────────────────
                 Text(s(AppStrings.symbol, lang),
                     style: const TextStyle(
                         color: AppTheme.textSecond, fontSize: 13)),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Row(children: [
                   Expanded(
                     child: TextFormField(
                       controller: _symbolCtrl,
                       textCapitalization: TextCapitalization.characters,
                       textDirection: TextDirection.ltr,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1),
                       decoration: InputDecoration(
                         hintText: s(AppStrings.symbolHint, lang),
-                        prefixIcon: const Icon(Icons.candlestick_chart,
+                        prefixIcon: const Icon(Icons.candlestick_chart_rounded,
                             color: AppTheme.primary),
                       ),
+                      onChanged: (_) => setState(() {}),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? s(AppStrings.symbolRequired, lang) : null,
                       onFieldSubmitted: (_) => _fetchPrice(),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _fetchingPrice ? null : _fetchPrice,
-                      style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(70, 52)),
-                      child: _fetchingPrice
-                          ? const SizedBox(
-                              width: 18, height: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : Text(s(AppStrings.getPrice, lang)),
-                    ),
+                  _GradientButton(
+                    onTap: _fetchingPrice ? null : _fetchPrice,
+                    child: _fetchingPrice
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : Text(s(AppStrings.getPrice, lang),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)),
                   ),
                 ]),
 
+                // کارت قیمت فعلی
                 if (_currentPrice != null) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.divider),
-                    ),
-                    child: Row(children: [
-                      const Icon(Icons.price_check,
-                          color: AppTheme.green, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_resolvedSymbol ?? _symbolCtrl.text}: $_currentPrice',
-                        style: const TextStyle(
-                            color: AppTheme.green,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ]),
-                  ),
+                  _PriceCard(
+                    symbol: _resolvedSymbol ?? _symbolCtrl.text,
+                    price: _currentPrice!,
+                  ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1),
                 ],
 
                 const SizedBox(height: 20),
 
+                // ── قیمت هدف ─────────────────────────────────────
                 Text(s(AppStrings.targetPrice, lang),
                     style: const TextStyle(
                         color: AppTheme.textSecond, fontSize: 13)),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _priceCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textDirection: TextDirection.ltr,
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     hintText: s(AppStrings.priceHint, lang),
-                    prefixIcon: const Icon(Icons.flag_outlined,
+                    prefixIcon: const Icon(Icons.flag_rounded,
                         color: AppTheme.primary),
                   ),
                   validator: (v) {
@@ -177,16 +228,19 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
                 ),
                 const SizedBox(height: 12),
 
+                // راهنما
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppTheme.primary.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: AppTheme.primary.withOpacity(0.2)),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.info_outline,
+                    const Icon(Icons.auto_awesome_rounded,
                         color: AppTheme.primary, size: 16),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         s(AppStrings.autoDetect, lang),
@@ -198,19 +252,126 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
                 ),
 
                 const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: provider.status == AlertStatus.loading
+
+                // دکمه ثبت
+                _GradientButton(
+                  onTap: provider.status == AlertStatus.loading
                       ? null : _submit,
+                  fullWidth: true,
+                  height: 54,
                   child: provider.status == AlertStatus.loading
                       ? const SizedBox(
                           height: 22, width: 22,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : Text(s(AppStrings.setAlert, lang)),
-                ),
+                      : Text(s(AppStrings.setAlert, lang),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
+                ).animate().fadeIn(duration: 300.ms),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── کارت قیمت فعلی ────────────────────────────────────────────────────────────
+
+class _PriceCard extends StatelessWidget {
+  final String symbol;
+  final double price;
+
+  const _PriceCard({required this.symbol, required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.green.withOpacity(0.1),
+            AppTheme.green.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.green.withOpacity(0.3)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: AppTheme.green.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.price_check_rounded,
+              color: AppTheme.green, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(symbol,
+                style: const TextStyle(
+                    color: AppTheme.textSecond, fontSize: 12)),
+            Text(
+              price.toStringAsFixed(price >= 100 ? 2 : 5),
+              style: const TextStyle(
+                  color: AppTheme.green,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ]),
+    );
+  }
+}
+
+// ── دکمه گرادیانت ─────────────────────────────────────────────────────────────
+
+class _GradientButton extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool fullWidth;
+  final double height;
+
+  const _GradientButton({
+    required this.child,
+    this.onTap,
+    this.fullWidth = false,
+    this.height = 48,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedOpacity(
+        opacity: onTap == null ? 0.5 : 1.0,
+        duration: 200.ms,
+        child: Container(
+          height: height,
+          width: fullWidth ? double.infinity : null,
+          padding: fullWidth ? null : const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppTheme.primary, Color(0xFF9C27B0)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(child: child),
         ),
       ),
     );
