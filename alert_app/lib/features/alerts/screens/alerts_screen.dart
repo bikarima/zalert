@@ -15,8 +15,10 @@ import '../../../core/l10n/locale_provider.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -577,6 +579,10 @@ class _SettingsTab extends StatelessWidget {
                   onTap: onChangeLang,
                 ),
 
+                // ── کانال تلگرام ──────────────────────────────────
+                _TelegramChannelCard(lang: lang),
+                SizedBox(height: 8.h),
+
                 // لینک تلگرام
                 _SettingItem(
                   icon: Icons.link_rounded,
@@ -592,6 +598,10 @@ class _SettingsTab extends StatelessWidget {
                   title: lang == 'fa' ? '📊 معاملات من' : '📊 My Trades',
                   onTap: () => context.push('/trades'),
                 ),
+
+                // ── تست Push Notification ─────────────────────────
+                _TestNotificationCard(lang: lang),
+                SizedBox(height: 8.h),
 
                 _SettingItem(
                   icon: Icons.logout_rounded,
@@ -649,6 +659,234 @@ class _SettingItem extends StatelessWidget {
                   color: AppTheme.textSec(context), size: 18.sp),
             ]),
           ),
+        ),
+      ),
+    ).animate().fadeIn(duration: 200.ms);
+  }
+}
+
+// ── Telegram Channel Card ─────────────────────────────────────────────────────
+
+class _TelegramChannelCard extends StatelessWidget {
+  final String lang;
+  const _TelegramChannelCard({required this.lang});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16.r),
+        child: InkWell(
+          onTap: () async {
+            final uri = Uri.parse('https://t.me/ZAlertPlus');
+            try {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            } catch (_) {}
+          },
+          borderRadius: BorderRadius.circular(16.r),
+          child: Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0088CC), Color(0xFF005F8F)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0088CC).withOpacity(0.3),
+                  blurRadius: 12.r,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(children: [
+              Container(
+                width: 44.w, height: 44.w,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.telegram, color: Colors.white, size: 24.sp),
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lang == 'fa' ? 'کانال تلگرام ما' : 'Our Telegram Channel',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      '@ZAlertPlus',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 11.sp,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  color: Colors.white.withOpacity(0.7), size: 16.sp),
+            ]),
+          ),
+        ),
+      ),
+    ).animate().fadeIn(duration: 200.ms);
+  }
+}
+
+// ── Test Push Notification ────────────────────────────────────────────────────
+
+class _TestNotificationCard extends StatefulWidget {
+  final String lang;
+  const _TestNotificationCard({required this.lang});
+
+  @override
+  State<_TestNotificationCard> createState() => _TestNotificationCardState();
+}
+
+class _TestNotificationCardState extends State<_TestNotificationCard> {
+  bool _sending = false;
+  String? _status;
+  String? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    _token = NotificationService.instance.fcmToken;
+  }
+
+  Future<void> _sendTest() async {
+    setState(() { _sending = true; _status = null; });
+
+    try {
+      // نوتیف local بفرست
+      await NotificationService.instance.showTestNotification(widget.lang);
+      setState(() {
+        _status  = widget.lang == 'fa'
+            ? '✅ نوتیف ارسال شد — اگه دیدید کار میکنه!'
+            : '✅ Notification sent — if you see it, it works!';
+        _sending = false;
+      });
+    } catch (e) {
+      setState(() {
+        _status  = '❌ Error: $e';
+        _sending = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lang  = widget.lang;
+    final isRtl = lang == 'fa';
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      child: Container(
+        padding: EdgeInsets.all(14.w),
+        decoration: BoxDecoration(
+          color: AppTheme.card(context),
+          borderRadius: BorderRadius.circular(14.r),
+          border: Border.all(color: AppTheme.border(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: isRtl
+              ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 36.w, height: 36.w,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Icon(Icons.notifications_active_outlined,
+                    color: AppTheme.primary, size: 18.sp),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: isRtl
+                      ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lang == 'fa' ? 'تست Push Notification' : 'Test Push Notification',
+                      style: TextStyle(
+                        color: AppTheme.text(context),
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (_token != null)
+                      Text(
+                        'FCM: ${_token!.substring(0, 20)}...',
+                        style: TextStyle(
+                            color: AppTheme.textSec(context), fontSize: 9.sp),
+                      )
+                    else
+                      Text(
+                        lang == 'fa' ? '⚠️ توکن دریافت نشده' : '⚠️ No FCM token',
+                        style: TextStyle(color: AppTheme.orange, fontSize: 10.sp),
+                      ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: _sending ? null : _sendTest,
+                child: AnimatedContainer(
+                  duration: 200.ms,
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [AppTheme.primary, Color(0xFF9C27B0)]),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: _sending
+                      ? SizedBox(width: 16.w, height: 16.w,
+                          child: const CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : Text(
+                          lang == 'fa' ? 'تست' : 'Test',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ),
+            ]),
+
+            if (_status != null) ...[
+              SizedBox(height: 8.h),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                decoration: BoxDecoration(
+                  color: _status!.startsWith('✅')
+                      ? AppTheme.green.withOpacity(0.1)
+                      : AppTheme.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Text(_status!,
+                    style: TextStyle(
+                      color: _status!.startsWith('✅')
+                          ? AppTheme.green : AppTheme.red,
+                      fontSize: 11.sp,
+                    )),
+              ),
+            ],
+          ],
         ),
       ),
     ).animate().fadeIn(duration: 200.ms);

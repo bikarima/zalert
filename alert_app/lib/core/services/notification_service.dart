@@ -162,7 +162,29 @@ class NotificationService {
     );
   }
 
-  // ── Scheduled calendar notifications ─────────────────────────────
+  // ── Test Notification ─────────────────────────────────────────────
+
+  Future<void> showTestNotification(String lang) async {
+    await _localNotif.show(
+      999,
+      lang == 'fa' ? '🔔 تست نوتیفیکیشن' : '🔔 Test Notification',
+      lang == 'fa'
+          ? 'اگه این رو میبینید، push notification کار میکنه ✅'
+          : 'If you see this, push notifications are working ✅',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelAlerts.id,
+          _channelAlerts.name,
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          color: const Color(0xFF6C63FF),
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      payload: 'test',
+    );
+  }
 
   /// زمان‌بندی نوتیف 10 دقیقه قبل از خبر مهم
   Future<void> scheduleCalendarNotification({
