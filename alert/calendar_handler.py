@@ -78,7 +78,13 @@ async def fetch_calendar(week: str = 'thisweek',
         _cache_time[cache_key] = now
 
     tz = _get_tz(user_tz)
-    return _parse_events(raw_cached, tz)
+    events = _parse_events(raw_cached, tz)
+
+    # فقط امروز و روزهای بعد رو برگردون
+    today = datetime.now(tz).date()
+    events = [e for e in events if e['date'] >= today.strftime('%Y-%m-%d')]
+
+    return events
 
 
 def _parse_events(raw: List[Dict], tz: pytz.BaseTzInfo) -> List[Dict]:
