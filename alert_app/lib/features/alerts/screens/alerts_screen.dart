@@ -11,7 +11,6 @@ import '../widgets/price_ticker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../calendar/screens/calendar_screen.dart';
 import '../../trades/screens/trades_screen.dart';
-import '../../trades/providers/trade_provider.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/services/api_service.dart';

@@ -116,14 +116,16 @@ class _TradesScreenState extends State<TradesScreen>
   Future<void> _handleDriveAuth(BuildContext context, String lang) async {
     if (GoogleDriveService.instance.isSignedIn) {
       await GoogleDriveService.instance.signOut();
+      if (!context.mounted) return;
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(lang == 'fa' ? 'از Google خارج شدید' : 'Signed out from Google'),
       ));
     } else {
       final ok = await GoogleDriveService.instance.signIn();
+      if (!context.mounted) return;
       setState(() {});
-      if (ok && context.mounted) {
+      if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(lang == 'fa'
               ? 'وارد Google Drive شدید ✓'
