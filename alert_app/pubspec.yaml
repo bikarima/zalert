@@ -74,11 +74,23 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/fonts/
+
+  fonts:
+    - family: IranSans
+      fonts:
+        - asset: assets/fonts/IranSans-Bold.ttf
+          weight: 700
+
+    - family: TexGyreAdventor
+      fonts:
+        - asset: assets/fonts/TexGyreAdventor-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/TexGyreAdventor-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -51,62 +51,27 @@ class _CalendarScreenState extends State<CalendarScreen>
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: AppTheme.bg(context),
-        appBar: AppBar(
-          backgroundColor: AppTheme.bg(context),
-          title: Text(
-            lang == 'fa' ? 'تقویم اقتصادی' : 'Economic Calendar',
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            // دکمه فیلتر
-            Stack(
-              alignment: Alignment.topRight,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.filter_list_rounded,
-                      color: !provider.filter.isDefault
-                          ? AppTheme.primary
-                          : AppTheme.textSec(context),
-                      size: 22.sp),
-                  onPressed: () async {
-                    final result = await showModalBottomSheet<CalendarFilter>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => CalendarFilterSheet(
-                        initial: provider.filter,
-                        lang: lang,
-                      ),
-                    );
-                    if (result != null) {
-                      provider.applyFilter(result);
-                    }
-                  },
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(130.h),
+          child: _CalendarHeader(
+            lang: lang,
+            provider: provider,
+            tabs: _tabs,
+            onFilter: () async {
+              final result = await showModalBottomSheet<CalendarFilter>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => CalendarFilterSheet(
+                  initial: provider.filter,
+                  lang: lang,
                 ),
-                if (!provider.filter.isDefault)
-                  Positioned(
-                    top: 8.h, right: 8.w,
-                    child: Container(
-                      width: 8.w, height: 8.w,
-                      decoration: const BoxDecoration(
-                          color: AppTheme.red, shape: BoxShape.circle),
-                    ),
-                  ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.refresh_rounded, size: 20.sp),
-              onPressed: () => provider.load(week: provider.week),
-            ),
-          ],
-          bottom: TabBar(
-            controller: _tabs,
-            onTap: (i) => provider.load(week: i == 0 ? 'thisweek' : 'thisweek',
-                todayOnly: i == 1),
-            tabs: [
-              Tab(text: lang == 'fa' ? 'این هفته' : 'This Week'),
-              Tab(text: lang == 'fa' ? 'امروز' : 'Today'),
-            ],
+              );
+              if (result != null) provider.applyFilter(result);
+            },
+            onRefresh: () => provider.load(week: provider.week),
+            onTabChanged: (i) => provider.load(
+                week: 'thisweek', todayOnly: i == 1),
           ),
         ),
         body: Column(
@@ -134,6 +99,252 @@ class _CalendarScreenState extends State<CalendarScreen>
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Calendar Header ───────────────────────────────────────────────────────────
+
+class _CalendarHeader extends StatelessWidget {
+  final String lang;
+  final CalendarProvider provider;
+  final TabController tabs;
+  final VoidCallback onFilter;
+  final VoidCallback onRefresh;
+  final ValueChanged<int> onTabChanged;
+
+  const _CalendarHeader({
+    required this.lang,
+    required this.provider,
+    required this.tabs,
+    required this.onFilter,
+    required this.onRefresh,
+    required this.onTabChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final isRtl   = lang == 'fa';
+    final today   = DateTime.now();
+    final weekday = _weekdayName(today.weekday, lang);
+    final dateStr = '${today.day} ${_monthName(today.month, lang)}';
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF1A1035), const Color(0xFF0D0D1A)]
+              : [const Color(0xFFEEEAFF), const Color(0xFFF5F5FF)],
+        ),
+        border: Border(
+          bottom: BorderSide(color: AppTheme.divider(context), width: 1),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Directionality(
+          textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── ردیف بالا: تاریخ + دکمه‌ها ───────────────────────
+              Padding(
+                padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
+                child: Row(children: [
+                  // آیکون تقویم با گرادیانت
+                  Container(
+                    width: 38.w, height: 38.w,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppTheme.primary, Color(0xFF9C27B0)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(10.r),
+                      boxShadow: [BoxShadow(
+                        color: AppTheme.primary.withOpacity(0.4),
+                        blurRadius: 8.r, offset: const Offset(0, 3),
+                      )],
+                    ),
+                    child: Icon(Icons.calendar_month_rounded,
+                        color: Colors.white, size: 20.sp),
+                  ),
+                  SizedBox(width: 10.w),
+
+                  // عنوان + تاریخ
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          lang == 'fa' ? 'تقویم اقتصادی' : 'Economic Calendar',
+                          style: TextStyle(
+                            color: AppTheme.text(context),
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '$weekday، $dateStr',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // تعداد رویدادهای فیلتر شده
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20.r),
+                      border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.event_note_rounded,
+                          color: AppTheme.primary, size: 12.sp),
+                      SizedBox(width: 4.w),
+                      Text('${provider.events.length}',
+                          style: TextStyle(
+                              color: AppTheme.primary,
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.bold)),
+                    ]),
+                  ),
+                  SizedBox(width: 8.w),
+
+                  // دکمه فیلتر
+                  _HeaderIconBtn(
+                    icon: Icons.tune_rounded,
+                    active: !provider.filter.isDefault,
+                    onTap: onFilter,
+                    badge: !provider.filter.isDefault,
+                  ),
+                  SizedBox(width: 4.w),
+                  _HeaderIconBtn(
+                    icon: Icons.refresh_rounded,
+                    onTap: onRefresh,
+                  ),
+                ]),
+              ),
+
+              // ── تب بار سفارشی ─────────────────────────────────────
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+                child: Container(
+                  height: 36.h,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface(context),
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(color: AppTheme.border(context)),
+                  ),
+                  child: TabBar(
+                    controller: tabs,
+                    onTap: onTabChanged,
+                    indicator: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppTheme.primary, Color(0xFF9C27B0)],
+                      ),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: AppTheme.textSec(context),
+                    labelStyle: TextStyle(
+                        fontSize: 12.sp, fontWeight: FontWeight.w600),
+                    unselectedLabelStyle: TextStyle(fontSize: 12.sp),
+                    padding: EdgeInsets.all(3.w),
+                    tabs: [
+                      Tab(text: lang == 'fa' ? 'این هفته' : 'This Week'),
+                      Tab(text: lang == 'fa' ? 'امروز' : 'Today'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _weekdayName(int weekday, String lang) {
+    if (lang == 'fa') {
+      const names = ['', 'دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه','یکشنبه'];
+      return names[weekday];
+    } else {
+      const names = ['', 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+      return names[weekday];
+    }
+  }
+
+  String _monthName(int month, String lang) {
+    if (lang == 'fa') {
+      const names = ['','ژانویه','فوریه','مارس','آوریل','مه','ژوئن',
+                     'ژوئیه','اوت','سپتامبر','اکتبر','نوامبر','دسامبر'];
+      return names[month];
+    } else {
+      const names = ['','Jan','Feb','Mar','Apr','May','Jun',
+                     'Jul','Aug','Sep','Oct','Nov','Dec'];
+      return names[month];
+    }
+  }
+}
+
+class _HeaderIconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool active;
+  final bool badge;
+
+  const _HeaderIconBtn({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+    this.badge  = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 34.w, height: 34.w,
+            decoration: BoxDecoration(
+              color: active
+                  ? AppTheme.primary.withOpacity(0.15)
+                  : AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(9.r),
+              border: Border.all(
+                color: active ? AppTheme.primary : AppTheme.border(context),
+              ),
+            ),
+            child: Icon(icon,
+                color: active ? AppTheme.primary : AppTheme.textSec(context),
+                size: 17.sp),
+          ),
+        ),
+        if (badge)
+          Positioned(
+            top: -2.h, right: -2.w,
+            child: Container(
+              width: 8.w, height: 8.w,
+              decoration: const BoxDecoration(
+                  color: AppTheme.red, shape: BoxShape.circle),
+            ),
+          ),
+      ],
     );
   }
 }

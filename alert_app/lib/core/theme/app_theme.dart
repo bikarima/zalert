@@ -47,7 +47,12 @@ class AppTheme {
   static bool _d(BuildContext ctx) =>
       Theme.of(ctx).brightness == Brightness.dark;
 
-  // ── backward compat (برای کدهای قدیمی که context ندارن) ─────────
+  // ── Font families ─────────────────────────────────────────────────
+  static const String fontFa = 'IranSans';
+  static const String fontEn = 'TexGyreAdventor';
+
+  static String fontFamily(String lang) =>
+      lang == 'fa' ? fontFa : fontEn;
   static const Color background  = darkBg;
   static const Color surface_    = darkSurface;
   static const Color card_       = darkCard;

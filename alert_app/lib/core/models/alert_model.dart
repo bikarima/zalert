@@ -31,4 +31,12 @@ class AlertModel {
       );
 
   bool get isAbove => alertType == 'above';
+
+  String directionText(String lang) {
+    if (lang == 'fa') {
+      return isAbove ? '⬆️ بالا رفتن' : '⬇️ پایین آمدن';
+    } else {
+      return isAbove ? '⬆️ Going Up' : '⬇️ Going Down';
+    }
+  }
 }

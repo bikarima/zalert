@@ -80,7 +80,7 @@ class AlertCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(16.r),
                         border: Border.all(color: dirColor.withOpacity(0.3)),
                       ),
-                      child: Text(alert.direction,
+                      child: Text(alert.directionText(lang),
                           style: TextStyle(color: dirColor,
                               fontSize: 9.sp, fontWeight: FontWeight.w600)),
                     ),

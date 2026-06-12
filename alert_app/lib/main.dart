@@ -31,16 +31,20 @@ class AlertApp extends StatelessWidget {
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (_, themeProvider, localeProvider, __) {
+          final fontFamily = AppTheme.fontFamily(localeProvider.lang);
           return ScreenUtilInit(
-            // طراحی بر اساس 390x844 (iPhone 14 / Samsung S21)
             designSize: const Size(390, 844),
             minTextAdapt: true,
             splitScreenMode: true,
             builder: (context, child) => MaterialApp.router(
               title: 'Alert',
               debugShowCheckedModeBanner: false,
-              theme: AppTheme.light,
-              darkTheme: AppTheme.dark,
+              theme: AppTheme.light.copyWith(
+                textTheme: AppTheme.light.textTheme.apply(fontFamily: fontFamily),
+              ),
+              darkTheme: AppTheme.dark.copyWith(
+                textTheme: AppTheme.dark.textTheme.apply(fontFamily: fontFamily),
+              ),
               themeMode: themeProvider.mode,
               routerConfig: AppRouter.router,
             ),
