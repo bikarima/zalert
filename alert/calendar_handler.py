@@ -21,9 +21,12 @@ import pytz
 
 _cache: Dict[str, List[Dict]] = {}
 _cache_time: Dict[str, datetime] = {}
-_CACHE_TTL = timedelta(minutes=30)
+_CACHE_TTL = timedelta(minutes=60)  # افزایش از 30 به 60 دقیقه
+_last_429: Optional[datetime] = None  # آخرین بار که 429 گرفتیم
 
 FF_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
+
+_RETRY_AFTER_429 = timedelta(minutes=15)  # بعد از 429، تا 15 دقیقه request نزن
 
 IMPACT_MAP = {
     'High':         'high',
@@ -46,55 +49,75 @@ def _get_tz(user_tz: Optional[str]) -> pytz.BaseTzInfo:
 async def fetch_calendar(week: str = 'thisweek',
                          user_tz: Optional[str] = None) -> List[Dict]:
     """دریافت تقویم هفته جاری با cache"""
+    global _last_429
     now       = datetime.utcnow()
-    cache_key = 'thisweek'  # FF فقط thisweek داره
+    cache_key = 'thisweek'
 
+    # اگه cache معتبره برگردون
     if (
         cache_key in _cache
         and cache_key in _cache_time
         and now - _cache_time[cache_key] < _CACHE_TTL
     ):
-        raw_cached = _cache[cache_key]
-    else:
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(
-                    FF_URL,
-                    headers={'User-Agent': 'Mozilla/5.0'},
-                    follow_redirects=True,
-                )
-                resp.raise_for_status()
-                raw_cached = resp.json()
-        except Exception as e:
+        tz     = _get_tz(user_tz)
+        return _post_process(_cache[cache_key], tz, now)
+
+    # اگه 429 گرفتیم و هنوز 15 دقیقه نگذشته، cache قدیمی رو برگردون
+    if _last_429 and now - _last_429 < _RETRY_AFTER_429:
+        print(f"[Calendar] Rate limited — از cache استفاده میشه")
+        tz = _get_tz(user_tz)
+        return _post_process(_cache.get(cache_key, []), tz, now)
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                FF_URL,
+                headers={'User-Agent': 'Mozilla/5.0'},
+                follow_redirects=True,
+            )
+
+            if resp.status_code == 429:
+                _last_429 = now
+                print(f"[Calendar] 429 Rate Limit — از cache استفاده میشه")
+                tz = _get_tz(user_tz)
+                return _post_process(_cache.get(cache_key, []), tz, now)
+
+            resp.raise_for_status()
+            raw_cached = resp.json()
+            _last_429  = None  # reset
+
+    except Exception as e:
+        if '429' not in str(e):
             print(f"[Calendar] خطا: {e}")
-            raw_cached = _cache.get(cache_key, [])
+        tz = _get_tz(user_tz)
+        return _post_process(_cache.get(cache_key, []), tz, now)
 
-        _cache[cache_key]      = raw_cached
-        _cache_time[cache_key] = now
+    _cache[cache_key]      = raw_cached
+    _cache_time[cache_key] = now
 
-    tz     = _get_tz(user_tz)
-    events = _parse_events(raw_cached, tz)
+    tz = _get_tz(user_tz)
+    return _post_process(raw_cached, tz, now)
 
-    # فقط امروز و بعد + ساعت‌های نگذشته
+
+def _post_process(raw: List[Dict], tz: pytz.BaseTzInfo,
+                   now: datetime) -> List[Dict]:
+    """parse + فیلتر رویدادهای گذشته"""
+    events    = _parse_events(raw, tz)
     now_local = datetime.now(tz)
     today_str = now_local.strftime('%Y-%m-%d')
-
-    filtered = []
+    filtered  = []
     for e in events:
         if e['date'] < today_str:
-            continue  # روزهای گذشته حذف
+            continue
         if e['date'] == today_str and e['time_utc']:
-            # رویداد امروزه — چک کن ساعتش گذشته یا نه
             try:
                 from dateutil import parser as dp
                 event_utc = dp.parse(e['time_utc']).replace(tzinfo=pytz.utc)
-                # 30 دقیقه grace period — اخبار تا 30 دقیقه بعد از ساعتشون نشون داده میشن
                 if event_utc < now_local.astimezone(pytz.utc) - timedelta(minutes=30):
                     continue
             except Exception:
-                pass  # اگه parse نشد نشونش بده
+                pass
         filtered.append(e)
-
     return filtered
 
 
