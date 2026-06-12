@@ -43,21 +43,14 @@ class _TradesScreenState extends State<TradesScreen>
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: AppTheme.bg(context),
-        body: CustomScrollView(
-          slivers: [
-            // ── Header ─────────────────────────────────────────────
+        body: NestedScrollView(
+          headerSliverBuilder: (context, _) => [
             SliverAppBar(
               pinned: true,
-              expandedHeight: 130.h,
               backgroundColor: AppTheme.bg(context),
-              flexibleSpace: FlexibleSpaceBar(
-                background: _TradesHeader(provider: provider, lang: lang),
-              ),
               title: Text(lang == 'fa' ? 'معاملات من' : 'My Trades',
-                  style: TextStyle(
-                      fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
               actions: [
-                // دکمه Google Drive login
                 IconButton(
                   icon: Icon(
                     GoogleDriveService.instance.isSignedIn
@@ -70,33 +63,35 @@ class _TradesScreenState extends State<TradesScreen>
                   onPressed: () => _handleDriveAuth(context, lang),
                 ),
               ],
-              bottom: TabBar(
-                controller: _tabs,
-                tabs: [
-                  Tab(text: lang == 'fa' ? 'باز' : 'Open'),
-                  Tab(text: lang == 'fa' ? 'بسته' : 'Closed'),
-                ],
-              ),
-            ),
-
-            SliverFillRemaining(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _TradeList(
-                    trades: provider.openTrades,
-                    lang: lang,
-                    isOpen: true,
-                  ),
-                  _TradeList(
-                    trades: provider.closedTrades,
-                    lang: lang,
-                    isOpen: false,
-                  ),
-                ],
+              // ── آمار ───────────────────────────────────────────────
+              bottom: PreferredSize(
+                preferredSize: Size.fromHeight(100.h),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TradesHeader(provider: provider, lang: lang),
+                    TabBar(
+                      controller: _tabs,
+                      indicatorColor: AppTheme.primary,
+                      labelColor: AppTheme.primary,
+                      unselectedLabelColor: AppTheme.textSec(context),
+                      tabs: [
+                        Tab(text: lang == 'fa' ? 'باز' : 'Open'),
+                        Tab(text: lang == 'fa' ? 'بسته' : 'Closed'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
+          body: TabBarView(
+            controller: _tabs,
+            children: [
+              _TradeList(trades: provider.openTrades,   lang: lang, isOpen: true),
+              _TradeList(trades: provider.closedTrades, lang: lang, isOpen: false),
+            ],
+          ),
         ),
 
         // ── دکمه Enter Position ───────────────────────────────────
@@ -158,20 +153,11 @@ class _TradesHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark   = Theme.of(context).brightness == Brightness.dark;
     final totalPnl = provider.totalPnl;
     final pnlColor = totalPnl >= 0 ? AppTheme.green : AppTheme.red;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF0D1A0D), const Color(0xFF0A0A14)]
-              : [const Color(0xFFE8F5E9), const Color(0xFFF5F5FF)],
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(16.w, 68.h, 16.w, 8.h),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 6.h, 16.w, 8.h),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -188,7 +174,7 @@ class _TradesHeader extends StatelessWidget {
             icon: totalPnl >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
           ),
           _StatCard(
-            label: lang == 'fa' ? 'Win Rate' : 'Win Rate',
+            label: 'Win Rate',
             value: '${provider.winRate.toStringAsFixed(0)}%',
             color: AppTheme.orange,
             icon: Icons.emoji_events_rounded,
