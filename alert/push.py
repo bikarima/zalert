@@ -15,7 +15,11 @@ _initialized = False
 def _ensure_initialized():
     global _initialized
     if not _initialized:
-        cred = credentials.Certificate('firebase-adminsdk.json')
+        import os
+        # path مطلق فایل json کنار push.py
+        base_dir  = os.path.dirname(os.path.abspath(__file__))
+        cred_path = os.path.join(base_dir, 'firebase-adminsdk.json')
+        cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
         _initialized = True
 
