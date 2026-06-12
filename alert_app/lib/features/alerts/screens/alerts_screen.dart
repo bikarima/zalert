@@ -579,6 +579,13 @@ class _SettingsTab extends StatelessWidget {
                   onTap: onChangeLang,
                 ),
 
+                // ── تنظیمات نوتیفیکیشن ────────────────────────────
+                _SettingItem(
+                  icon: Icons.notifications_outlined,
+                  title: lang == 'fa' ? 'تنظیمات اعلان‌ها' : 'Notification Settings',
+                  onTap: () => context.push('/notification-settings'),
+                ),
+
                 // ── کانال تلگرام ──────────────────────────────────
                 _TelegramChannelCard(lang: lang),
                 SizedBox(height: 8.h),

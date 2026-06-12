@@ -596,3 +596,53 @@ async def add_announcement(
     }
     _ANNOUNCEMENTS.insert(0, ann)
     return {"success": True, "id": ann["id"]}
+
+
+# ── Debug Push ────────────────────────────────────────────────────────────────
+
+@api.get("/debug/push/{user_id}", summary="بررسی push token کاربر (debug)")
+async def debug_push(
+    user_id: int,
+    x_api_key: Optional[str] = Header(default=None),
+):
+    """بررسی توکن‌های push یک کاربر"""
+    _check_api_key(x_api_key)
+    db, _ = _get_db_mt5()
+    devices = db.get_user_devices(user_id)
+    user    = db.get_user(user_id)
+    return {
+        "user":        user,
+        "devices":     devices,
+        "token_count": len(devices),
+    }
+
+
+@api.post("/debug/test-push/{user_id}", summary="ارسال push تست به کاربر")
+async def test_push(
+    user_id: int,
+    x_api_key: Optional[str] = Header(default=None),
+):
+    """ارسال یه push تست به همه دستگاه‌های کاربر"""
+    _check_api_key(x_api_key)
+    _check_bot()
+    db, _ = _get_db_mt5()
+    tokens = db.get_push_tokens(user_id)
+
+    if not tokens:
+        raise HTTPException(status_code=404,
+            detail=f"هیچ push token برای user {user_id} ثبت نشده")
+
+    from push import send_push_multi
+    count = await send_push_multi(
+        tokens,
+        title="🔔 تست Push",
+        body=f"این یه پیام تست برای user {user_id} هست",
+        data={"type": "test"},
+    )
+
+    return {
+        "success":     count > 0,
+        "tokens_used": len(tokens),
+        "sent":        count,
+        "tokens":      [t[:20] + "..." for t in tokens],
+    }
