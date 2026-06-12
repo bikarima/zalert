@@ -361,6 +361,19 @@ async def get_price(
     return PriceResponse(symbol=sym, resolved_symbol=real, price=price, time=now)
 
 
+@api.get("/symbols/search", summary="جستجوی نماد در MT5")
+async def search_symbols(
+    q: str = Query(..., description="عبارت جستجو مثل XAU یا BTC"),
+    x_api_key: Optional[str] = Header(default=None)
+):
+    """جستجوی نمادهای موجود در MT5 — برای autocomplete"""
+    _check_api_key(x_api_key)
+    from mt5_handler import MT5Handler
+    mt5_h = MT5Handler()
+    results = mt5_h.search_symbols(q)
+    return {"symbols": results}
+
+
 # ── آمار ─────────────────────────────────────────────────────────────
 
 @api.get("/stats", response_model=StatsResponse, summary="آمار کل آلرت‌های فعال")

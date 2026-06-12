@@ -14,7 +14,7 @@ class PriceTickerWidget extends StatefulWidget {
 }
 
 class _PriceTickerWidgetState extends State<PriceTickerWidget> {
-  final _symbols = ['XAUUSD', 'EURUSD', 'BTCUSD', 'GBPUSD'];
+  final _symbols = ['XAUUSD', 'EURUSD', 'WTI', 'GBPUSD'];
   final Map<String, double?> _prices = {};
   final Map<String, double?> _prevPrices = {};
   Timer? _timer;

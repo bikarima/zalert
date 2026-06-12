@@ -24,7 +24,7 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
   String? _resolvedSymbol;
   bool    _fetchingPrice = false;
 
-  final _quickSymbols = ['XAUUSD', 'EURUSD', 'BTCUSD', 'GBPUSD', 'USDJPY'];
+  final _quickSymbols = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'WTI', 'US500', 'NAS100'];
 
   @override
   void dispose() {
