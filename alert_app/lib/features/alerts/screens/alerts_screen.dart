@@ -95,7 +95,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
             const CalendarScreen(),
             // ── تب ۳: معاملات ─────────────────────────────────────
             const TradesScreen(),
-            // ── تب ۴: پروفایل ─────────────────────────────────────            _SettingsTab(
+            // ── تب ۴: پروفایل ─────────────────────────────────────
+            _SettingsTab(
               lang: lang,
               username: auth.username,
               onLogout: () async {
