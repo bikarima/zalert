@@ -102,12 +102,14 @@ class ApiService {
     String? impact,
     String? currency,
     bool todayOnly = false,
+    String? timezone,
   }) async {
     final res = await _dio.get('/calendar', queryParameters: {
       'week': week,
       if (impact != null) 'impact': impact,
       if (currency != null) 'currency': currency,
       if (todayOnly) 'today_only': true,
+      if (timezone != null) 'timezone': timezone,
     });
     return (res.data as List).cast<Map<String, dynamic>>();
   }

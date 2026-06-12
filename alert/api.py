@@ -483,7 +483,8 @@ class CalendarEvent(BaseModel):
     currency: str
     date:     str
     time:     str
-    impact:   str   # high / medium / low / holiday
+    time_utc: str   # زمان UTC برای scheduled notification در Flutter
+    impact:   str
     forecast: str
     previous: str
     actual:   str
@@ -497,20 +498,22 @@ async def get_calendar(
     impact:      Optional[str] = Query(None, description="فیلتر: high, medium, low"),
     currency:    Optional[str] = Query(None, description="فیلتر ارز مثل USD, EUR"),
     today_only:  bool = Query(False, description="فقط رویدادهای امروز"),
+    timezone:    Optional[str] = Query(None, description="timezone کاربر مثل Asia/Tehran"),
     x_api_key:   Optional[str] = Header(default=None),
 ):
     """
     تقویم اقتصادی از Forex Factory.
+    زمان‌ها بر اساس timezone کاربر نمایش داده میشن.
     داده هر 30 دقیقه cache میشه.
     """
     _check_api_key(x_api_key)
 
     if today_only:
-        events = await get_today_events()
+        events = await get_today_events(user_tz=timezone)
     elif impact == 'high':
-        events = await get_high_impact_events(week)
+        events = await get_high_impact_events(week, user_tz=timezone)
     else:
-        events = await fetch_calendar(week)
+        events = await fetch_calendar(week, user_tz=timezone)
 
     # فیلتر ارز
     if currency:
