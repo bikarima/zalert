@@ -440,7 +440,7 @@ def main():
             api,
             host=config.API_HOST,
             port=config.API_PORT,
-            log_level="warning"
+            log_level="error"   # فقط error نشون میده، warning رو مخفی میکنه
         )
 
     api_thread = threading.Thread(target=run_api, daemon=True)
