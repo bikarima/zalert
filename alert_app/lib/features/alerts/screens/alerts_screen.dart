@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -8,13 +9,14 @@ import '../providers/alert_provider.dart';
 import '../widgets/alert_card.dart';
 import '../widgets/price_ticker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../calendar/screens/calendar_screen.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_provider.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
-
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
 }
@@ -45,16 +47,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final provider = context.watch<AlertProvider>();
     final lang     = context.watch<LocaleProvider>().lang;
     final isRtl    = lang == 'fa';
-    final s        = AppStrings.t;
 
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        backgroundColor: AppTheme.background,
+        backgroundColor: AppTheme.bg(context),
         body: IndexedStack(
           index: _currentTab,
           children: [
-            // ── تب ۱: آلرت‌های فعال ───────────────────────────────
+            // ── تب ۰: آلرت‌های فعال ───────────────────────────────
             _ActiveAlertsTab(
               alerts: provider.activeAlerts,
               loading: provider.status == AlertStatus.loading,
@@ -62,16 +63,16 @@ class _AlertsScreenState extends State<AlertsScreen> {
               onDelete: (id) => _delete(context, id),
               onRefresh: _loadData,
             ),
-
-            // ── تب ۲: triggered ───────────────────────────────────
+            // ── تب ۱: triggered ───────────────────────────────────
             _TriggeredAlertsTab(
               alerts: provider.triggeredAlerts,
               loading: provider.status == AlertStatus.loading,
               lang: lang,
               onRefresh: _loadData,
             ),
-
-            // ── تب ۳: تنظیمات ─────────────────────────────────────
+            // ── تب ۲: تقویم اقتصادی ───────────────────────────────
+            const CalendarScreen(),
+            // ── تب ۳: پروفایل ─────────────────────────────────────
             _SettingsTab(
               lang: lang,
               username: auth.username,
@@ -83,21 +84,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
           ],
         ),
-
-        // ── Bottom Navigation ──────────────────────────────────────
         bottomNavigationBar: _BottomNav(
           currentIndex: _currentTab,
           triggeredCount: provider.triggeredAlerts.length,
           lang: lang,
           onTap: (i) => setState(() => _currentTab = i),
         ),
-
-        // ── FAB ───────────────────────────────────────────────────
         floatingActionButton: _currentTab == 0
             ? FloatingActionButton.extended(
                 onPressed: () => context.push('/add-alert'),
-                icon: const Icon(Icons.add_rounded),
-                label: Text(s(AppStrings.newAlert, lang)),
+                icon: Icon(Icons.add_rounded, size: 20.sp),
+                label: Text(AppStrings.t(AppStrings.newAlert, lang),
+                    style: TextStyle(fontSize: 13.sp)),
                 backgroundColor: AppTheme.primary,
               ).animate().scale(duration: 300.ms, curve: Curves.elasticOut)
             : null,
@@ -106,7 +104,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 }
 
-// ── Bottom Navigation ──────────────────────────────────────────────────────────
+// ── Bottom Navigation ─────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
   final int currentIndex;
@@ -125,12 +123,12 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        border: const Border(top: BorderSide(color: AppTheme.divider)),
+        color: AppTheme.surface(context),
+        border: Border(top: BorderSide(color: AppTheme.divider(context))),
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: 6.h),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -150,11 +148,18 @@ class _BottomNav extends StatelessWidget {
                 onTap: () => onTap(1),
               ),
               _NavItem(
+                icon: Icons.calendar_today_outlined,
+                activeIcon: Icons.calendar_today_rounded,
+                label: lang == 'fa' ? 'تقویم' : 'Calendar',
+                active: currentIndex == 2,
+                onTap: () => onTap(2),
+              ),
+              _NavItem(
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: lang == 'fa' ? 'پروفایل' : 'Profile',
-                active: currentIndex == 2,
-                onTap: () => onTap(2),
+                active: currentIndex == 3,
+                onTap: () => onTap(3),
               ),
             ],
           ),
@@ -188,10 +193,10 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: 200.ms,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
         decoration: BoxDecoration(
           color: active ? AppTheme.primary.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12.r),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -199,20 +204,20 @@ class _NavItem extends StatelessWidget {
             badges.Badge(
               showBadge: badge != null,
               badgeContent: Text(badge ?? '',
-                  style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  style: TextStyle(color: Colors.white, fontSize: 9.sp)),
               badgeStyle: const badges.BadgeStyle(badgeColor: AppTheme.red),
               child: Icon(
                 active ? activeIcon : icon,
-                color: active ? AppTheme.primary : AppTheme.textSecond,
-                size: 24,
+                color: active ? AppTheme.primary : AppTheme.textSec(context),
+                size: 22.sp,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 3.h),
             Text(
               label,
               style: TextStyle(
-                color: active ? AppTheme.primary : AppTheme.textSecond,
-                fontSize: 11,
+                color: active ? AppTheme.primary : AppTheme.textSec(context),
+                fontSize: 10.sp,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -233,49 +238,34 @@ class _ActiveAlertsTab extends StatelessWidget {
   final VoidCallback onRefresh;
 
   const _ActiveAlertsTab({
-    required this.alerts,
-    required this.loading,
-    required this.lang,
-    required this.onDelete,
-    required this.onRefresh,
+    required this.alerts, required this.loading, required this.lang,
+    required this.onDelete, required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        // ── Header ─────────────────────────────────────────────
         SliverAppBar(
-          expandedHeight: 200,
+          expandedHeight: 160.h,
           floating: false,
           pinned: true,
-          backgroundColor: AppTheme.background,
+          backgroundColor: AppTheme.bg(context),
           flexibleSpace: FlexibleSpaceBar(
             background: _HeaderWidget(lang: lang),
           ),
-          title: Text(
-            AppStrings.t(AppStrings.myAlerts, lang),
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          title: Text(AppStrings.t(AppStrings.myAlerts, lang),
+              style: TextStyle(
+                  color: AppTheme.text(context),
+                  fontWeight: FontWeight.bold, fontSize: 16.sp)),
           actions: [
             IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: onRefresh,
-            ),
+                icon: Icon(Icons.refresh_rounded, size: 20.sp),
+                onPressed: onRefresh),
           ],
         ),
-
-        // ── قیمت‌های لحظه‌ای ───────────────────────────────────
-        SliverToBoxAdapter(
-          child: PriceTickerWidget(lang: lang),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-        // ── لیست آلرت‌ها ───────────────────────────────────────
+        SliverToBoxAdapter(child: PriceTickerWidget(lang: lang)),
+        SliverToBoxAdapter(child: SizedBox(height: 6.h)),
         loading
             ? const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()))
@@ -284,37 +274,32 @@ class _ActiveAlertsTab extends StatelessWidget {
                     child: _EmptyState(
                       icon: Icons.notifications_none_rounded,
                       text: AppStrings.t(AppStrings.noActiveAlerts, lang),
-                    ),
-                  )
+                    ))
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (ctx, i) => Slidable(
                         key: ValueKey(alerts[i].id),
                         endActionPane: ActionPane(
                           motion: const BehindMotion(),
-                          extentRatio: 0.25,
+                          extentRatio: 0.22,
                           children: [
                             SlidableAction(
                               onPressed: (_) => onDelete(alerts[i].id),
                               backgroundColor: AppTheme.red,
                               foregroundColor: Colors.white,
                               icon: Icons.delete_rounded,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14.r),
                             ),
                           ],
                         ),
-                        child: AlertCard(
-                          alert: alerts[i],
-                          lang: lang,
-                        ).animate().fadeIn(
-                            duration: 300.ms,
-                            delay: Duration(milliseconds: i * 60)),
+                        child: AlertCard(alert: alerts[i], lang: lang)
+                            .animate()
+                            .fadeIn(duration: 300.ms,
+                                delay: Duration(milliseconds: i * 60)),
                       ),
                       childCount: alerts.length,
-                    ),
-                  ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    )),
+        SliverToBoxAdapter(child: SizedBox(height: 90.h)),
       ],
     );
   }
@@ -329,10 +314,8 @@ class _TriggeredAlertsTab extends StatelessWidget {
   final VoidCallback onRefresh;
 
   const _TriggeredAlertsTab({
-    required this.alerts,
-    required this.loading,
-    required this.lang,
-    required this.onRefresh,
+    required this.alerts, required this.loading,
+    required this.lang, required this.onRefresh,
   });
 
   @override
@@ -341,14 +324,13 @@ class _TriggeredAlertsTab extends StatelessWidget {
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppTheme.background,
-          title: Text(
-            AppStrings.t(AppStrings.triggered, lang),
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          backgroundColor: AppTheme.bg(context),
+          title: Text(AppStrings.t(AppStrings.triggered, lang),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp)),
           actions: [
             IconButton(
-                icon: const Icon(Icons.refresh_rounded), onPressed: onRefresh),
+                icon: Icon(Icons.refresh_rounded, size: 20.sp),
+                onPressed: onRefresh),
           ],
         ),
         loading
@@ -359,21 +341,17 @@ class _TriggeredAlertsTab extends StatelessWidget {
                     child: _EmptyState(
                       icon: Icons.check_circle_outline_rounded,
                       text: AppStrings.t(AppStrings.noTriggeredAlerts, lang),
-                    ),
-                  )
+                    ))
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (_, i) => AlertCard(
-                        alert: alerts[i],
-                        lang: lang,
-                        isTriggered: true,
+                        alert: alerts[i], lang: lang, isTriggered: true,
                       ).animate().fadeIn(
                           duration: 300.ms,
                           delay: Duration(milliseconds: i * 60)),
                       childCount: alerts.length,
-                    ),
-                  ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                    )),
+        SliverToBoxAdapter(child: SizedBox(height: 32.h)),
       ],
     );
   }
@@ -388,62 +366,88 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onChangeLang;
 
   const _SettingsTab({
-    required this.lang,
-    required this.username,
-    required this.onLogout,
-    required this.onChangeLang,
+    required this.lang, required this.username,
+    required this.onLogout, required this.onChangeLang,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isRtl = lang == 'fa';
+    final isRtl         = lang == 'fa';
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark        = themeProvider.isDark;
+
     return Directionality(
       textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppTheme.background,
+            backgroundColor: AppTheme.bg(context),
             title: Text(lang == 'fa' ? 'پروفایل' : 'Profile',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp)),
           ),
           SliverToBoxAdapter(
             child: Column(
               children: [
-                const SizedBox(height: 24),
-
-                // آواتار
+                SizedBox(height: 20.h),
                 Container(
-                  width: 80, height: 80,
+                  width: 70.w, height: 70.w,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [AppTheme.primary, Color(0xFF9C27B0)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(
+                      color: AppTheme.primary.withOpacity(0.4),
+                      blurRadius: 16.r, offset: const Offset(0, 6),
+                    )],
                   ),
-                  child: const Icon(Icons.person_rounded,
-                      size: 40, color: Colors.white),
+                  child: Icon(Icons.person_rounded, size: 32.sp, color: Colors.white),
                 ).animate().scale(duration: 400.ms, curve: Curves.elasticOut),
-
-                const SizedBox(height: 12),
+                SizedBox(height: 10.h),
                 if (username != null)
                   Text(username!,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                const SizedBox(height: 32),
+                      style: TextStyle(
+                          color: AppTheme.text(context),
+                          fontSize: 15.sp, fontWeight: FontWeight.bold)),
+                SizedBox(height: 24.h),
 
-                // آیتم‌های تنظیمات
+                // Dark/Light toggle
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+                  child: Material(
+                    color: AppTheme.card(context),
+                    borderRadius: BorderRadius.circular(14.r),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                      child: Row(children: [
+                        Container(
+                          width: 36.w, height: 36.w,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10.r),
+                          ),
+                          child: Icon(
+                            isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                            color: AppTheme.primary, size: 17.sp,
+                          ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Text(
+                          lang == 'fa'
+                              ? (isDark ? 'حالت شب' : 'حالت روز')
+                              : (isDark ? 'Dark Mode' : 'Light Mode'),
+                          style: TextStyle(color: AppTheme.text(context),
+                              fontSize: 13.sp, fontWeight: FontWeight.w500),
+                        ),
+                        const Spacer(),
+                        Switch(value: isDark, onChanged: (_) => themeProvider.toggle()),
+                      ]),
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 200.ms),
+
                 _SettingItem(
                   icon: Icons.language_rounded,
                   title: AppStrings.t(AppStrings.selectLanguage, lang),
@@ -455,6 +459,7 @@ class _SettingsTab extends StatelessWidget {
                   color: AppTheme.red,
                   onTap: onLogout,
                 ),
+                SizedBox(height: 32.h),
               ],
             ),
           ),
@@ -471,40 +476,37 @@ class _SettingItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _SettingItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.color,
+    required this.icon, required this.title, required this.onTap, this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppTheme.textPrimary;
+    final c = color ?? AppTheme.text(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
       child: Material(
-        color: AppTheme.card,
-        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(14.r),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14.r),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
             child: Row(children: [
               Container(
-                width: 40, height: 40,
+                width: 36.w, height: 36.w,
                 decoration: BoxDecoration(
                   color: c.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(10.r),
                 ),
-                child: Icon(icon, color: c, size: 20),
+                child: Icon(icon, color: c, size: 17.sp),
               ),
-              const SizedBox(width: 14),
-              Text(title,
-                  style: TextStyle(
-                      color: c, fontSize: 15, fontWeight: FontWeight.w500)),
+              SizedBox(width: 12.w),
+              Text(title, style: TextStyle(color: c, fontSize: 13.sp,
+                  fontWeight: FontWeight.w500)),
               const Spacer(),
-              Icon(Icons.chevron_right_rounded, color: AppTheme.textSecond),
+              Icon(Icons.chevron_right_rounded,
+                  color: AppTheme.textSec(context), size: 18.sp),
             ]),
           ),
         ),
@@ -513,7 +515,7 @@ class _SettingItem extends StatelessWidget {
   }
 }
 
-// ── Header Widget ─────────────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────────────────
 
 class _HeaderWidget extends StatelessWidget {
   final String lang;
@@ -521,76 +523,60 @@ class _HeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final auth     = context.watch<AuthProvider>();
     final provider = context.watch<AlertProvider>();
-    final isRtl = lang == 'fa';
+    final isRtl    = lang == 'fa';
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A1A35), AppTheme.background],
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: isDark
+              ? [const Color(0xFF1A1A35), AppTheme.darkBg]
+              : [const Color(0xFFEEEEFF), AppTheme.lightBg],
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 80, 20, 16),
+      padding: EdgeInsets.fromLTRB(20.w, 72.h, 20.w, 12.h),
       child: Directionality(
         textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    lang == 'fa'
-                        ? 'سلام${auth.username != null ? '، ${auth.username}' : ''} 👋'
-                        : 'Hello${auth.username != null ? ', ${auth.username}' : ''} 👋',
-                    style: const TextStyle(
-                      color: AppTheme.textSecond,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    lang == 'fa' ? 'آلرت‌های فعال' : 'Active Alerts',
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // شمارنده
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primary, Color(0xFF9C27B0)],
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  lang == 'fa'
+                      ? 'سلام${auth.username != null ? '، ${auth.username}' : ''} 👋'
+                      : 'Hello${auth.username != null ? ', ${auth.username}' : ''} 👋',
+                  style: TextStyle(color: AppTheme.textSec(context), fontSize: 12.sp),
                 ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Text(
-                '${provider.activeAlerts.length}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                SizedBox(height: 3.h),
+                Text(
+                  lang == 'fa' ? 'آلرت‌های فعال' : 'Active Alerts',
+                  style: TextStyle(color: AppTheme.text(context),
+                      fontSize: 18.sp, fontWeight: FontWeight.bold),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [AppTheme.primary, Color(0xFF9C27B0)]),
+              borderRadius: BorderRadius.circular(12.r),
+              boxShadow: [BoxShadow(
+                color: AppTheme.primary.withOpacity(0.4),
+                blurRadius: 10.r, offset: const Offset(0, 4),
+              )],
+            ),
+            child: Text('${provider.activeAlerts.length}',
+                style: TextStyle(color: Colors.white,
+                    fontSize: 20.sp, fontWeight: FontWeight.bold)),
+          ),
+        ]),
       ),
     );
   }
@@ -601,7 +587,6 @@ class _HeaderWidget extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String text;
-
   const _EmptyState({required this.icon, required this.text});
 
   @override
@@ -611,23 +596,18 @@ class _EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 80, height: 80,
+            width: 70.w, height: 70.w,
             decoration: BoxDecoration(
-              color: AppTheme.surface,
+              color: AppTheme.surface(context),
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.border),
+              border: Border.all(color: AppTheme.border(context)),
             ),
-            child: Icon(icon, size: 36, color: AppTheme.textSecond),
+            child: Icon(icon, size: 30.sp, color: AppTheme.textSec(context)),
           ),
-          const SizedBox(height: 16),
-          Text(text,
-              style: const TextStyle(
-                  color: AppTheme.textSecond, fontSize: 15)),
+          SizedBox(height: 14.h),
+          Text(text, style: TextStyle(color: AppTheme.textSec(context), fontSize: 13.sp)),
         ],
-      )
-          .animate()
-          .fadeIn(duration: 400.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms),
+      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0, duration: 400.ms),
     );
   }
 }

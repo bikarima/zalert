@@ -471,3 +471,54 @@ async def health():
         "bot_ready": _bot_app is not None,
         "version": "2.0.0"
     }
+
+
+# ── تقویم اقتصادی ─────────────────────────────────────────────────────────────
+
+from calendar_handler import fetch_calendar, get_today_events, get_high_impact_events
+
+class CalendarEvent(BaseModel):
+    id:       str
+    title:    str
+    currency: str
+    date:     str
+    time:     str
+    impact:   str   # high / medium / low / holiday
+    forecast: str
+    previous: str
+    actual:   str
+    url:      str
+
+
+@api.get("/calendar", response_model=List[CalendarEvent],
+         summary="تقویم اقتصادی هفته جاری")
+async def get_calendar(
+    week:        str  = Query('thisweek', description="thisweek یا nextweek"),
+    impact:      Optional[str] = Query(None, description="فیلتر: high, medium, low"),
+    currency:    Optional[str] = Query(None, description="فیلتر ارز مثل USD, EUR"),
+    today_only:  bool = Query(False, description="فقط رویدادهای امروز"),
+    x_api_key:   Optional[str] = Header(default=None),
+):
+    """
+    تقویم اقتصادی از Forex Factory.
+    داده هر 30 دقیقه cache میشه.
+    """
+    _check_api_key(x_api_key)
+
+    if today_only:
+        events = await get_today_events()
+    elif impact == 'high':
+        events = await get_high_impact_events(week)
+    else:
+        events = await fetch_calendar(week)
+
+    # فیلتر ارز
+    if currency:
+        cur = currency.upper()
+        events = [e for e in events if e['currency'].upper() == cur]
+
+    # فیلتر impact
+    if impact and impact != 'high':
+        events = [e for e in events if e['impact'] == impact.lower()]
+
+    return [CalendarEvent(**e) for e in events]

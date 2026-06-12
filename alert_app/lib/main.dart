@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_provider.dart';
 import 'core/services/notification_service.dart';
 import 'core/l10n/locale_provider.dart';
 import 'features/alerts/providers/alert_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/calendar/providers/calendar_provider.dart';
 import 'core/router/app_router.dart';
 
 void main() async {
@@ -20,21 +23,29 @@ class AlertApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => AlertProvider()),
+        ChangeNotifierProvider(create: (_) => CalendarProvider()),
       ],
-      child: Consumer<LocaleProvider>(
-        builder: (_, locale, __) => Directionality(
-          textDirection:
-              locale.isRtl ? TextDirection.rtl : TextDirection.ltr,
-          child: MaterialApp.router(
-            title: 'Alert',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.dark,
-            routerConfig: AppRouter.router,
-          ),
-        ),
+      child: Consumer2<ThemeProvider, LocaleProvider>(
+        builder: (_, themeProvider, localeProvider, __) {
+          return ScreenUtilInit(
+            // طراحی بر اساس 390x844 (iPhone 14 / Samsung S21)
+            designSize: const Size(390, 844),
+            minTextAdapt: true,
+            splitScreenMode: true,
+            builder: (context, child) => MaterialApp.router(
+              title: 'Alert',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: themeProvider.mode,
+              routerConfig: AppRouter.router,
+            ),
+          );
+        },
       ),
     );
   }

@@ -95,7 +95,22 @@ class ApiService {
     return res.data as Map<String, dynamic>;
   }
 
-  // ── Devices ────────────────────────────────────────────────────────
+  // ── Calendar ───────────────────────────────────────────────────────
+
+  Future<List<dynamic>> getCalendar({
+    String week = 'thisweek',
+    String? impact,
+    String? currency,
+    bool todayOnly = false,
+  }) async {
+    final res = await _dio.get('/calendar', queryParameters: {
+      'week': week,
+      if (impact != null) 'impact': impact,
+      if (currency != null) 'currency': currency,
+      if (todayOnly) 'today_only': true,
+    });
+    return res.data as List;
+  }
 
   Future<List<dynamic>> getDevices(int userId) async {
     final res = await _dio.get('/user/$userId/devices');
