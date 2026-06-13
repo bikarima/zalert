@@ -111,7 +111,7 @@ async def list_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"• {g['group_title']}\n  🆔 <code>{g['group_id']}</code>\n  📅 {g['added_at']}\n")
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
-# ── دستورات عمومی ────────────────────────────────────────────────────
+# ── دستورات عمومی ───────────────────────────    ─────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /start"""

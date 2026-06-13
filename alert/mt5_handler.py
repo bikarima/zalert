@@ -29,16 +29,17 @@ class MT5Handler:
         if not mt5.initialize(timeout=config.MT5_TIMEOUT, portable=config.MT5_PORTABLE):
             print(f"خطا در اتصال به MT5: {mt5.last_error()}")
             return False
-        self.initialized = True
+        self.initialized    = True
+        self._symbols_cache = []  # reset cache
         print("✅ اتصال به MT5 برقرار شد")
         return True
 
     def _get_all_symbol_names(self) -> List[str]:
-        """لیست همه نمادها"""
-        syms = mt5.symbols_get()
-        if syms is None:
-            return []
-        return [s.name for s in syms]
+        """لیست همه نمادها — با cache"""
+        if not hasattr(self, '_symbols_cache') or not self._symbols_cache:
+            syms = mt5.symbols_get()
+            self._symbols_cache = [s.name for s in syms] if syms else []
+        return self._symbols_cache
 
     def resolve_symbol(self, symbol: str) -> Optional[str]:
         """
