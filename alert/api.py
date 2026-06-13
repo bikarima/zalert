@@ -147,16 +147,16 @@ async def register(body: RegisterRequest, x_api_key: Optional[str] = Header(defa
     print(f"[Register] ← user_id={body.user_id} platform={body.platform} device={body.device_name}")
     print(f"[Register] ← push_token={'YES: '+body.push_token[:40]+'...' if body.push_token else 'NONE ⚠️'}")
 
-    is_new_user = db.get_user(body.user_id) is None
+    is_new_user = await db.get_user(body.user_id) is None
 
-    db.upsert_user(
+    await db.upsert_user(
         user_id=body.user_id,
         username=body.username,
         push_token=body.push_token,
         platform=body.platform,
         device_name=body.device_name
     )
-    devices = db.get_user_devices(body.user_id)
+    devices = await db.get_user_devices(body.user_id)
     print(f"[Register] → devices in DB: {len(devices)}")
 
     # ارسال پیام تلگرام به کاربر
@@ -222,11 +222,11 @@ async def create_alert(
 
     # اگه push_token فرستاده، دستگاه رو ثبت/آپدیت کن
     if body.push_token:
-        db.upsert_user(body.user_id, username, body.push_token,
+        await db.upsert_user(body.user_id, username, body.push_token,
                        body.platform, body.device_name)
 
     # بررسی محدودیت
-    if db.count_user_alerts(body.user_id) >= config.MAX_ALERTS_PER_USER:
+    if await db.count_user_alerts(body.user_id) >= config.MAX_ALERTS_PER_USER:
         raise HTTPException(status_code=400,
             detail=f"حداکثر {config.MAX_ALERTS_PER_USER} آلرت فعال مجاز است")
 
@@ -240,7 +240,7 @@ async def create_alert(
 
     alert_type = "below" if current_price > body.target_price else "above"
 
-    alert_id = db.add_alert(
+    alert_id = await db.add_alert(
         user_id=body.user_id,
         username=username,
         symbol=real_symbol,
@@ -265,7 +265,7 @@ async def create_alert(
         print(f"[API] پیام تلگرام ارسال نشد: {e}")
 
     # ارسال push notification به همه دستگاه‌های کاربر
-    push_tokens = db.get_push_tokens(body.user_id)
+    push_tokens = await db.get_push_tokens(body.user_id)
     # اگه توکن جاری هم داده شده و هنوز در لیست نیست اضافه‌اش کن
     if body.push_token and body.push_token not in push_tokens:
         push_tokens.append(body.push_token)
@@ -301,7 +301,7 @@ async def get_alerts(
     """لیست آلرت‌های فعال (و در صورت درخواست، triggered شده) یک کاربر"""
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    alerts = db.get_user_alerts(user_id, include_triggered=include_triggered)
+    alerts = await db.get_user_alerts(user_id, include_triggered=include_triggered)
     return [_to_alert_out(a) for a in alerts]
 
 
@@ -312,7 +312,7 @@ async def get_alert(
 ):
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    alert = db.get_alert_by_id(alert_id)
+    alert = await db.get_alert_by_id(alert_id)
     if alert is None:
         raise HTTPException(status_code=404, detail="آلرت یافت نشد")
     return _to_alert_out(alert)
@@ -326,7 +326,7 @@ async def delete_alert(
 ):
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    deleted = db.delete_alert(alert_id, user_id)
+    deleted = await db.delete_alert(alert_id, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="آلرت یافت نشد یا متعلق به این کاربر نیست")
     return DeleteResponse(success=True, message=f"آلرت {alert_id} حذف شد")
@@ -339,7 +339,7 @@ async def clear_alerts(
 ):
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    count = db.clear_user_alerts(user_id)
+    count = await db.clear_user_alerts(user_id)
     return DeleteResponse(success=True, message=f"{count} آلرت حذف شد")
 
 
@@ -384,7 +384,7 @@ async def search_symbols(
 async def get_stats(x_api_key: Optional[str] = Header(default=None)):
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    by_symbol = db.get_stats()
+    by_symbol = await db.get_stats()
     total = sum(by_symbol.values())
     return StatsResponse(total_active=total, by_symbol=by_symbol)
 
@@ -403,7 +403,7 @@ async def update_push_token(
     """
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    db.upsert_user(user_id, push_token=push_token, platform=platform)
+    await db.upsert_user(user_id, push_token=push_token, platform=platform)
     return {"success": True, "message": "توکن push آپدیت شد"}
 
 
@@ -418,7 +418,7 @@ async def get_devices(
     """همه دستگاه‌هایی که این کاربر push token ثبت کرده"""
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    return db.get_user_devices(user_id)
+    return await db.get_user_devices(user_id)
 
 
 @api.delete("/user/{user_id}/devices/{device_id}",
@@ -432,11 +432,11 @@ async def remove_device(
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
     # پیدا کردن توکن با device_id
-    devices = db.get_user_devices(user_id)
+    devices = await db.get_user_devices(user_id)
     device = next((d for d in devices if d['id'] == device_id), None)
     if device is None:
         raise HTTPException(status_code=404, detail="دستگاه یافت نشد")
-    db.remove_device(user_id, device['push_token'])
+    await db.remove_device(user_id, device['push_token'])
     return DeleteResponse(success=True, message="دستگاه حذف شد")
 
 
@@ -449,7 +449,7 @@ async def remove_all_devices(
     """حذف همه دستگاه‌ها — مثلاً وقتی کاربر از همه جا logout میکنه"""
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    count = db.remove_all_devices(user_id)
+    count = await db.remove_all_devices(user_id)
     return DeleteResponse(success=True, message=f"{count} دستگاه حذف شد")
 
 
@@ -469,9 +469,9 @@ async def update_push_token(
     """
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    db.upsert_user(user_id, push_token=push_token,
+    await db.upsert_user(user_id, push_token=push_token,
                    platform=platform, device_name=device_name)
-    devices = db.get_user_devices(user_id)
+    devices = await db.get_user_devices(user_id)
     return {
         "success": True,
         "message": "توکن push ثبت شد",
@@ -612,8 +612,8 @@ async def debug_push(
     """بررسی توکن‌های push یک کاربر"""
     _check_api_key(x_api_key)
     db, _ = _get_db_mt5()
-    devices = db.get_user_devices(user_id)
-    user    = db.get_user(user_id)
+    devices = await db.get_user_devices(user_id)
+    user    = await db.get_user(user_id)
     return {
         "user":        user,
         "devices":     devices,
@@ -630,7 +630,7 @@ async def test_push(
     _check_api_key(x_api_key)
     _check_bot()
     db, _ = _get_db_mt5()
-    tokens = db.get_push_tokens(user_id)
+    tokens = await db.get_push_tokens(user_id)
 
     if not tokens:
         raise HTTPException(status_code=404,
@@ -650,3 +650,4 @@ async def test_push(
         "sent":        count,
         "tokens":      [t[:20] + "..." for t in tokens],
     }
+
