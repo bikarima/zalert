@@ -6,13 +6,13 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from datetime import datetime
 import pytz
 import config
-from database import Database
+from database import Database, init_db
 from mt5_handler import MT5Handler
 from api import api, set_bot_app
 from push import send_alert_triggered_push
 
-# ایجاد نمونه‌ها
-db = Database()
+# ایجاد نمونه‌ها — db بعد از init_db() در main() مقداردهی میشه
+db  = Database()
 mt5 = MT5Handler()
 
 # ── بررسی دسترسی ─────────────────────────────────────────────────────
@@ -21,20 +21,20 @@ def is_admin(update: Update) -> bool:
     """بررسی ادمین بودن فرستنده"""
     return update.effective_user.id == config.ADMIN_USER_ID
 
-async def is_allowed_group(update: Update) -> bool:
+def is_allowed_group(update: Update) -> bool:
     """بررسی اینکه پیام از یک گروه مجاز آمده"""
     chat = update.effective_chat
     if chat.type not in (Chat.GROUP, Chat.SUPERGROUP):
         return False
-    return await db.is_allowed_group(chat.id)
+    return db.is_allowed_group(chat.id)
 
 def is_private_admin(update: Update) -> bool:
     """ادمین در DM ربات"""
     return (update.effective_chat.type == Chat.PRIVATE and is_admin(update))
 
-async def can_use_bot(update: Update) -> bool:
+def can_use_bot(update: Update) -> bool:
     """کاربر میتواند از ربات استفاده کند (گروه مجاز یا ادمین در DM)"""
-    return await is_allowed_group(update) or is_private_admin(update)
+    return is_allowed_group(update) or is_private_admin(update)
 
 # ── دستورات ادمین ────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ async def add_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     group_title = chat.title or str(chat.id)
-    await db.add_group(chat.id, group_title)
+    db.add_group(chat.id, group_title)
     await update.message.reply_text(
         f"✅ گروه «{group_title}» به لیست مجاز اضافه شد.\n"
         f"🆔 آیدی گروه: <code>{chat.id}</code>",
@@ -87,7 +87,7 @@ async def remove_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ آیدی گروه باید عدد باشد!")
             return
 
-    removed = await db.remove_group(group_id)
+    removed = db.remove_group(group_id)
     if removed:
         await update.message.reply_text(f"✅ گروه «{group_title}» از لیست مجاز حذف شد.")
     else:
@@ -101,7 +101,7 @@ async def list_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         return
 
-    groups = await db.get_all_groups()
+    groups = db.get_all_groups()
     if not groups:
         await update.message.reply_text("📭 هیچ گروه مجازی ثبت نشده.")
         return
@@ -115,7 +115,7 @@ async def list_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /start"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     is_adm = is_admin(update)
@@ -146,7 +146,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /help"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     message = """
@@ -182,7 +182,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /set"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     user_id = update.effective_user.id
@@ -200,7 +200,7 @@ async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ قیمت باید عدد باشد!")
         return
 
-    user_alert_count = await db.count_user_alerts(user_id)
+    user_alert_count = db.count_user_alerts(user_id)
     if user_alert_count >= config.MAX_ALERTS_PER_USER:
         await update.message.reply_text(f"❌ شما حداکثر {config.MAX_ALERTS_PER_USER} آلرت فعال می‌توانید داشته باشید!")
         return
@@ -220,7 +220,7 @@ async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         alert_type = "above"
         type_text = "⬆️ بالا رفتن"
 
-    alert_id = await db.add_alert(user_id, username, real_symbol, target_price, alert_type,
+    alert_id = db.add_alert(user_id, username, real_symbol, target_price, alert_type,
                             group_id=update.effective_chat.id)
 
     # نمایش نماد resolve شده اگه با ورودی فرق داشت
@@ -240,7 +240,7 @@ async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /price"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     if len(context.args) != 1:
@@ -270,11 +270,11 @@ async def get_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def list_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /list"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     user_id = update.effective_user.id
-    alerts = await db.get_user_alerts(user_id)
+    alerts = db.get_user_alerts(user_id)
 
     if not alerts:
         await update.message.reply_text("📭 شما هیچ آلرت فعالی ندارید.")
@@ -291,7 +291,7 @@ async def list_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /delete"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     user_id = update.effective_user.id
@@ -306,7 +306,7 @@ async def delete_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ شناسه آلرت باید عدد باشد!")
         return
 
-    deleted = await db.delete_alert(alert_id, user_id)
+    deleted = db.delete_alert(alert_id, user_id)
     if deleted:
         await update.message.reply_text(f"✅ آلرت {alert_id} حذف شد.")
     else:
@@ -314,11 +314,11 @@ async def delete_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def clear_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /clear"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
     user_id = update.effective_user.id
-    count = await db.clear_user_alerts(user_id)
+    count = db.clear_user_alerts(user_id)
 
     if count > 0:
         await update.message.reply_text(f"✅ {count} آلرت حذف شد.")
@@ -327,10 +327,10 @@ async def clear_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /stats"""
-    if not await can_use_bot(update):
+    if not can_use_bot(update):
         return
 
-    stats_data = await db.get_stats()
+    stats_data = db.get_stats()
     if not stats_data:
         await update.message.reply_text("📊 هیچ آلرت فعالی وجود ندارد.")
         return
@@ -348,7 +348,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
     """چک کردن آلرت‌ها هر CHECK_INTERVAL ثانیه"""
-    alerts = await db.get_all_active_alerts()
+    alerts = db.get_all_active_alerts()
 
     for alert in alerts:
         symbol = alert['symbol']
@@ -387,10 +387,10 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
 """
             try:
                 await context.bot.send_message(chat_id=group_id, text=message)
-                await db.mark_triggered(alert['id'])
+                db.mark_triggered(alert['id'])
 
                 # ارسال push notification به همه دستگاه‌های کاربر
-                push_tokens = await db.get_push_tokens(alert['user_id'])
+                push_tokens = db.get_push_tokens(alert['user_id'])
                 print(f"[Alert] triggered id={alert['id']} symbol={symbol} user={alert['user_id']} push_tokens={len(push_tokens)}")
                 if push_tokens:
                     sent = await send_alert_triggered_push(
@@ -410,6 +410,9 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
 # ── اجرا ─────────────────────────────────────────────────────────────
 
 def main():
+    # اول MongoDB connection رو در این event loop بساز
+    init_db()
+
     if not mt5.initialize():
         print("❌ خطا در اتصال به MT5. لطفاً MT5 را باز کنید.")
         return
@@ -465,5 +468,7 @@ if __name__ == '__main__':
         print("\n🛑 ربات متوقف شد")
     finally:
         mt5.shutdown()
+
+
 
 
