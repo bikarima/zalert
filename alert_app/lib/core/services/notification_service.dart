@@ -109,14 +109,41 @@ class NotificationService {
     // FCM
     try {
       _fcm = FirebaseMessaging.instance;
-      await _fcm!.requestPermission(alert: true, sound: true, badge: true);
+
+      // درخواست permission — حتماً باید قبل از هر چیز باشه
+      final settings = await _fcm!.requestPermission(
+        alert: true,
+        announcement: true,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+      debugPrint('[Push] Permission: ${settings.authorizationStatus}');
+
+      // foreground notifications رو فعال کن
+      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
       _fcmToken = await _fcm!.getToken();
       debugPrint('[Push] FCM token: $_fcmToken');
-      _fcm!.onTokenRefresh.listen((t) => _fcmToken = t);
-      FirebaseMessaging.onMessage.listen(_showLocalNotification);
+
+      _fcm!.onTokenRefresh.listen((t) {
+        _fcmToken = t;
+        debugPrint('[Push] Token refreshed: $t');
+      });
+      FirebaseMessaging.onMessage.listen((msg) {
+        debugPrint('[Push] Foreground message: ${msg.notification?.title}');
+        _showLocalNotification(msg);
+      });
       FirebaseMessaging.onMessageOpenedApp
           .listen((m) => onNotificationTap?.call(m.data));
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
       _ready = true;
     } catch (e) {
       debugPrint('[Push] FCM setup failed: $e');
