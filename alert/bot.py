@@ -391,8 +391,9 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
 
                 # ارسال push notification به همه دستگاه‌های کاربر
                 push_tokens = db.get_push_tokens(alert['user_id'])
+                print(f"[Alert] triggered id={alert['id']} symbol={symbol} user={alert['user_id']} push_tokens={len(push_tokens)}")
                 if push_tokens:
-                    await send_alert_triggered_push(
+                    sent = await send_alert_triggered_push(
                         tokens=push_tokens,
                         symbol=symbol,
                         target_price=target_price,
@@ -400,6 +401,9 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
                         alert_type=alert_type,
                         alert_id=alert['id']
                     )
+                    print(f"[Alert] push sent={sent}/{len(push_tokens)}")
+                else:
+                    print(f"[Alert] ⚠️ no push tokens for user {alert['user_id']}")
             except Exception as e:
                 print(f"خطا در ارسال پیام آلرت: {e}")
 

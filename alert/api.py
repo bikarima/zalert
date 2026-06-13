@@ -144,6 +144,9 @@ async def register(body: RegisterRequest, x_api_key: Optional[str] = Header(defa
     _check_bot()
     db, _ = _get_db_mt5()
 
+    print(f"[Register] ← user_id={body.user_id} platform={body.platform} device={body.device_name}")
+    print(f"[Register] ← push_token={'YES: '+body.push_token[:40]+'...' if body.push_token else 'NONE ⚠️'}")
+
     is_new_user = db.get_user(body.user_id) is None
 
     db.upsert_user(
@@ -154,6 +157,7 @@ async def register(body: RegisterRequest, x_api_key: Optional[str] = Header(defa
         device_name=body.device_name
     )
     devices = db.get_user_devices(body.user_id)
+    print(f"[Register] → devices in DB: {len(devices)}")
 
     # ارسال پیام تلگرام به کاربر
     from datetime import datetime
