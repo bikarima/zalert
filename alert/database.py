@@ -341,7 +341,72 @@ class Database:
             d["id"] = d.get("seq_id", 0)
         return docs
 
-    # ── Indexes ───────────────────────────────────────────────────────────────
+    # ── Auth OTP ────────────────────────────────────────────────────────────────────
+
+    async def create_otp(self, user_id: int, code_hash: str) -> None:
+        """ذخیره OTP جدید (۵ دقیقه اعتبار) — OTP قبلی جایگزین میشه."""
+        from datetime import timezone, timedelta
+        now        = datetime.now(timezone.utc)
+        expires_at = now + timedelta(minutes=5)
+        await get_db().auth_otps.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "user_id":    user_id,
+                "code_hash":  code_hash,
+                "expires_at": expires_at,
+                "attempts":   0,
+                "created_at": now,
+            }},
+            upsert=True,
+        )
+        # لاگ برای rate limiting (خودکار بعد از ۱ ساعت پاک میشه)
+        await get_db().otp_log.insert_one({"user_id": user_id, "created_at": now})
+
+    async def verify_otp(self, user_id: int, code_hash: str) -> tuple[bool, str]:
+        """
+        تأیید OTP. Returns (success, error_message).
+        بعد از موفقیت با delete_otp پاک کن.
+        """
+        from datetime import timezone
+        doc = await get_db().auth_otps.find_one({"user_id": user_id}, {"_id": 0})
+        if not doc:
+            return False, "کد تأیید یافت نشد — دوباره درخواست کنید"
+
+        expires_at = doc["expires_at"]
+        if not expires_at.tzinfo:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            await self.delete_otp(user_id)
+            return False, "کد منقضی شده — دوباره درخواست کنید"
+
+        attempts = doc.get("attempts", 0)
+        if attempts >= 5:
+            await self.delete_otp(user_id)
+            return False, "تعداد تلاش‌های مجاز تمام شد — دوباره درخواست کنید"
+
+        await get_db().auth_otps.update_one({"user_id": user_id}, {"$inc": {"attempts": 1}})
+
+        if doc["code_hash"] != code_hash:
+            remaining = 4 - attempts
+            if remaining <= 0:
+                await self.delete_otp(user_id)
+                return False, "کد نادرست — تمام تلاش‌ها استفاده شد"
+            return False, f"کد نادرست — {remaining} تلاش باقیمانده"
+
+        return True, ""
+
+    async def delete_otp(self, user_id: int) -> None:
+        """OTP رو بعد استفاده یا انقضا پاک کن."""
+        await get_db().auth_otps.delete_one({"user_id": user_id})
+
+    async def count_recent_otp_requests(self, user_id: int, since) -> int:
+        """تعداد درخواست‌های اخیر OTP — برای rate limiting."""
+        return await get_db().otp_log.count_documents({
+            "user_id":    user_id,
+            "created_at": {"$gte": since},
+        })
+
+    # ── Indexes ────────────────────────────────────────────────────────────────────
 
     async def ensure_indexes(self) -> None:
         db = get_db()
@@ -352,3 +417,8 @@ class Database:
         await db.users.create_index([("user_id", 1)], unique=True)
         await db.allowed_groups.create_index([("group_id", 1)], unique=True)
         await db.banned_users.create_index([("user_id", 1)], unique=True)
+        # OTP indexes
+        await db.auth_otps.create_index([("user_id", 1)], unique=True)
+        await db.auth_otps.create_index("expires_at", expireAfterSeconds=600)   # انقضای خودکار
+        await db.otp_log.create_index("created_at", expireAfterSeconds=3600)    # لاگ بعد ۱ساعت پاک
+
