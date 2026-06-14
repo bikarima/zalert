@@ -51,7 +51,7 @@ class AlertSummaryCard extends StatelessWidget {
                   _StatPill(
                     count: active.length,
                     label: lang == 'fa' ? 'فعال' : 'Active',
-                    color: AppTheme.primaryGold,
+                    color: AppTheme.primary,
                   ),
                   SizedBox(width: 8.w),
                   _StatPill(
@@ -63,7 +63,7 @@ class AlertSummaryCard extends StatelessWidget {
                   IconButton(
                     onPressed: onAddAlert,
                     icon: Icon(Icons.add_circle_outline,
-                        color: AppTheme.primaryGold, size: 22.sp),
+                        color: AppTheme.primary, size: 22.sp),
                     tooltip: lang == 'fa' ? 'آلرت جدید' : 'New alert',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -93,7 +93,7 @@ class AlertSummaryCard extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 4.h),
                 itemCount: recent.length,
                 separatorBuilder: (_, __) => Divider(
-                  height: 1, color: isDark ? Colors.white10 : Colors.black05,
+                  height: 1, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
                 ),
                 itemBuilder: (_, i) {
                   final a    = recent[i];
@@ -145,14 +145,14 @@ class AlertSummaryCard extends StatelessWidget {
                         Container(
                           padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryGold.withOpacity(0.12),
+                            color: AppTheme.primary.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(6.r),
                           ),
                           child: Text(
                             '#${a.id}',
                             style: TextStyle(
                               fontSize: 10.sp,
-                              color: AppTheme.primaryGold,
+                              color: AppTheme.primary,
                               fontWeight: FontWeight.w600,
                               fontFamily: 'TexGyreAdventor',
                             ),
@@ -179,12 +179,12 @@ class AlertSummaryCard extends StatelessWidget {
                               : 'View all ${active.length} alerts',
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppTheme.primaryGold,
+                            color: AppTheme.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         Icon(Icons.chevron_right, size: 14.sp,
-                            color: AppTheme.primaryGold),
+                            color: AppTheme.primary),
                       ],
                     ),
                   ),
