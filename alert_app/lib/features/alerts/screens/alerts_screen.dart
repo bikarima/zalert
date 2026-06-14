@@ -4,7 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/alert_provider.dart';
+import '../providers/alert_provider.dart';  // AlertStatus enum
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -44,7 +44,7 @@ class _AlertsScreenState extends State<AlertsScreen>
     final isDark = context.watch<ThemeProvider>().isDark;
     final auth   = context.watch<AuthProvider>();
     final prov   = context.watch<AlertProvider>();
-    final active = prov.alerts.where((a) => !a.triggered).toList();
+    final active = prov.activeAlerts;
     final isRtl  = lang == 'fa';
 
     return Directionality(
@@ -69,7 +69,7 @@ class _AlertsScreenState extends State<AlertsScreen>
                   background: _GradientHeader(
                     lang: lang, isDark: isDark,
                     activeCount: active.length,
-                    isLoading: prov.loading,
+                    isLoading: prov.status == AlertStatus.loading,
                   ),
                 ),
                 actions: [
@@ -84,7 +84,7 @@ class _AlertsScreenState extends State<AlertsScreen>
               ),
 
               // ── Content ───────────────────────────────────────────────
-              if (prov.loading)
+              if (prov.status == AlertStatus.loading)
                 SliverPadding(
                   padding: EdgeInsets.only(top: 12.h, bottom: 120.h),
                   sliver: SliverList(
@@ -514,7 +514,7 @@ class _AddAlertSheetState extends State<_AddAlertSheet> {
     try {
       final auth = context.read<AuthProvider>();
       if (auth.userId == null) return;
-      await context.read<AlertProvider>().addAlert(
+      await context.read<AlertProvider>().createAlert(
         userId:      auth.userId!,
         symbol:      sym,
         targetPrice: price,
