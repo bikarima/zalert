@@ -4,77 +4,121 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 
+/// Auth flow:
+///   1. requestOtp(userId)   — ارسال OTP به تلگرام
+///   2. verifyOtp(userId, code) — تأیید کد
+///   3. login() stores user in local storage
+///
+/// Device login (بدون تلگرام) مستقیم رجیستر میکنه.
 class AuthProvider extends ChangeNotifier {
   int?    _userId;
   String? _username;
-  bool    _loading = false;
+  bool    _loading  = false;
   String? _error;
 
-  int?    get userId   => _userId;
-  String? get username => _username;
-  bool    get loading  => _loading;
-  String? get error    => _error;
+  int?    get userId    => _userId;
+  String? get username  => _username;
+  bool    get loading   => _loading;
+  String? get error     => _error;
   bool    get isLoggedIn => _userId != null;
 
   AuthProvider() {
     _loadFromStorage();
+    // وقتی FCM token رفرش شد، سرور رو خبر کن
+    NotificationService.instance.onTokenRefresh = _onTokenRefresh;
   }
+
+  // ── Restore session ───────────────────────────────────────────────────────
 
   Future<void> _loadFromStorage() async {
     _userId   = await StorageService.instance.getUserId();
     _username = await StorageService.instance.getUsername();
     notifyListeners();
-    // بعد از لود، push token رو آپدیت کن
-    await _refreshPushToken();
+    if (_userId != null) await _syncPushToken();
   }
 
-  Future<void> _refreshPushToken() async {
-    if (_userId == null) return;
+  Future<void> _syncPushToken() async {
     final token = NotificationService.instance.fcmToken;
-    if (token != null) {
-      try {
-        await ApiService.instance.updatePushToken(
-          _userId!,
-          token,
-          platform: 'android',
-        );
-      } catch (_) {}
-    }
+    if (token == null || _userId == null) return;
+    try {
+      await ApiService.instance.updatePushToken(
+        _userId!, token,
+        platform:   await _platform(),
+        deviceName: await _deviceName(),
+      );
+    } catch (_) {}
   }
 
-  Future<bool> login(String userIdText, String username) async {
+  Future<void> _onTokenRefresh(String newToken) async {
+    if (_userId == null) return;
+    try {
+      await ApiService.instance.updatePushToken(
+        _userId!, newToken,
+        platform:   await _platform(),
+        deviceName: await _deviceName(),
+      );
+    } catch (_) {}
+  }
+
+  // ── OTP flow ──────────────────────────────────────────────────────────────
+
+  /// مرحله ۱ — ارسال OTP به تلگرام کاربر.
+  /// Returns true اگه کد با موفقیت ارسال شد.
+  Future<bool> requestOtp(String userIdText, {String? username}) async {
     _loading = true;
     _error   = null;
     notifyListeners();
 
     try {
       final userId = int.parse(userIdText.trim());
-      final deviceName = await _getDeviceName();
+      await ApiService.instance.requestOtp(userId, username: username?.trim());
+      _loading = false;
+      notifyListeners();
+      return true;
+    } on FormatException {
+      _error   = 'آیدی تلگرام باید عدد باشد';
+      _loading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error   = _extractError(e);
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 
-      // اول یه بار token رو بگیر
+  /// مرحله ۲ — تأیید OTP و ورود.
+  /// Returns true اگه کد صحیح بود و لاگین انجام شد.
+  Future<bool> verifyOtp(String userIdText, String code, {String? username}) async {
+    _loading = true;
+    _error   = null;
+    notifyListeners();
+
+    try {
+      final userId     = int.parse(userIdText.trim());
+      final deviceName = await _deviceName();
+      final platform   = await _platform();
       String? pushToken = NotificationService.instance.fcmToken;
-
-      // اگه null بود، کمی صبر کن و دوباره امتحان کن (retry)
       if (pushToken == null) {
         await Future.delayed(const Duration(seconds: 2));
         pushToken = NotificationService.instance.fcmToken;
       }
 
-      await ApiService.instance.register(
-        userId: userId,
-        username: username.trim().isEmpty ? null : username.trim(),
-        pushToken: pushToken,
-        platform: 'android',
+      final result = await ApiService.instance.verifyOtp(
+        userId:     userId,
+        code:       code.trim(),
         deviceName: deviceName,
+        platform:   platform,
+        pushToken:  pushToken,
       );
 
-      await StorageService.instance.saveUser(
-        userId,
-        username.trim().isEmpty ? userId.toString() : username.trim(),
-      );
+      final finalUsername = result['username'] as String? ??
+          (username?.trim().isNotEmpty == true ? username!.trim() : userId.toString());
 
+      await StorageService.instance.saveUser(userId, finalUsername);
       _userId   = userId;
-      _username = username.trim().isEmpty ? userId.toString() : username.trim();
+      _username = finalUsername;
       _loading  = false;
       notifyListeners();
       return true;
@@ -84,97 +128,58 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error   = 'خطا در اتصال به سرور: $e';
+      _error   = _extractError(e);
       _loading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// ورود با Device ID (بدون تلگرام)
+  // ── Device login (بدون تلگرام) ────────────────────────────────────────────
+
   Future<bool> loginWithDevice(String? username) async {
     _loading = true;
     _error   = null;
     notifyListeners();
 
     try {
-      final deviceIdInt = await StorageService.instance.getOrCreateDeviceIdAsInt();
-      final deviceName  = await _getDeviceName();
-
+      final deviceId   = await StorageService.instance.getOrCreateDeviceIdAsInt();
+      final deviceName = await _deviceName();
+      final platform   = await _platform();
       String? pushToken = NotificationService.instance.fcmToken;
       if (pushToken == null) {
         await Future.delayed(const Duration(seconds: 2));
         pushToken = NotificationService.instance.fcmToken;
       }
 
-      final displayName = (username != null && username.trim().isNotEmpty)
-          ? username.trim()
-          : 'device_$deviceIdInt';
+      final displayName = (username?.trim().isNotEmpty == true)
+          ? username!.trim()
+          : 'device_$deviceId';
 
       await ApiService.instance.register(
-        userId: deviceIdInt,
-        username: displayName,
-        pushToken: pushToken,
-        platform: 'android',
-        deviceName: deviceName,
+        userId: deviceId, username: displayName,
+        pushToken: pushToken, platform: platform, deviceName: deviceName,
       );
+      await StorageService.instance.saveUser(deviceId, displayName);
 
-      await StorageService.instance.saveUser(deviceIdInt, displayName);
-
-      _userId   = deviceIdInt;
+      _userId   = deviceId;
       _username = displayName;
       _loading  = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _error   = 'خطا در اتصال به سرور: $e';
+      _error   = _extractError(e);
       _loading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// لینک کردن حساب device به تلگرام
-  Future<bool> linkToTelegram(int telegramId) async {
-    if (_userId == null) return false;
-    _loading = true;
-    _error   = null;
-    notifyListeners();
-
-    try {
-      final pushToken  = NotificationService.instance.fcmToken;
-      final deviceName = await _getDeviceName();
-
-      await ApiService.instance.register(
-        userId: telegramId,
-        username: _username,
-        pushToken: pushToken,
-        platform: 'android',
-        deviceName: deviceName,
-      );
-
-      // آپدیت local با تلگرام ID
-      await StorageService.instance.saveUser(
-        telegramId,
-        _username ?? telegramId.toString(),
-      );
-      _userId  = telegramId;
-      _loading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _error   = 'خطا در لینک کردن: $e';
-      _loading = false;
-      notifyListeners();
-      return false;
-    }
-  }
+  // ── Logout ────────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
     if (_userId != null) {
-      try {
-        await ApiService.instance.removeAllDevices(_userId!);
-      } catch (_) {}
+      try { await ApiService.instance.removeAllDevices(_userId!); } catch (_) {}
     }
     await StorageService.instance.clear();
     _userId   = null;
@@ -182,12 +187,41 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> _getDeviceName() async {
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  Future<String> _deviceName() async {
     try {
       final info = await DeviceInfoPlugin().androidInfo;
       return '${info.brand} ${info.model}';
     } catch (_) {
-      return 'Android Device';
+      try {
+        final info = await DeviceInfoPlugin().iosInfo;
+        return info.name;
+      } catch (_) {
+        return 'Mobile Device';
+      }
     }
+  }
+
+  Future<String> _platform() async {
+    try {
+      await DeviceInfoPlugin().androidInfo;
+      return 'android';
+    } catch (_) {
+      return 'ios';
+    }
+  }
+
+  static String _extractError(Object e) {
+    final s = e.toString();
+    // DioException — سعی کن detail رو از body بگیر
+    if (s.contains('"detail"')) {
+      final match = RegExp(r'"detail"\s*:\s*"([^"]+)"').firstMatch(s);
+      if (match != null) return match.group(1)!;
+    }
+    if (s.contains('SocketException') || s.contains('Connection refused')) {
+      return 'سرور در دسترس نیست — اینترنت را بررسی کنید';
+    }
+    return 'خطا: $s';
   }
 }
