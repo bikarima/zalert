@@ -9,6 +9,7 @@ import '../../features/alerts/screens/alerts_screen.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/language/screens/language_screen.dart';
 import '../../features/settings/screens/notification_settings_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
 import '../../features/main/main_shell.dart';
 
 class AppRouter {
@@ -71,6 +72,10 @@ class AppRouter {
       GoRoute(
         path: '/alerts/history',
         builder: (_, __) => const AlertHistoryScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (_, __) => const SettingsScreen(),
       ),
       GoRoute(
         path: '/settings/notifications',
