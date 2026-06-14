@@ -4,18 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
-import '../../features/alerts/screens/alerts_screen.dart';
-import '../../features/alerts/screens/add_alert_screen.dart';
 import '../../features/alerts/screens/alert_history_screen.dart';
+import '../../features/alerts/screens/alerts_screen.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
 import '../../features/language/screens/language_screen.dart';
-import '../../features/calculator/screens/calculator_screen.dart';
-import '../../features/trades/screens/trades_screen.dart';
-import '../../features/announcements/screens/announcements_screen.dart';
 import '../../features/settings/screens/notification_settings_screen.dart';
-import '../../features/calendar/screens/calendar_screen.dart';
-import '../../features/dashboard/screens/dashboard_screen.dart';
-import '../../features/watchlist/screens/watchlist_screen.dart';
+import '../../features/main/main_shell.dart';
 
 class AppRouter {
   AppRouter._();
@@ -23,108 +17,60 @@ class AppRouter {
   static final router = GoRouter(
     initialLocation: '/splash',
     redirect: (context, state) async {
-      final auth   = context.read<AuthProvider>();
-      final prefs  = await SharedPreferences.getInstance();
-      final loc    = state.fullPath ?? state.uri.toString();
+      final auth  = context.read<AuthProvider>();
+      final prefs = await SharedPreferences.getInstance();
+      final loc   = state.fullPath ?? state.uri.toString();
 
-      final langSet       = prefs.getString('lang') != null;
+      final langSet        = prefs.getString('lang') != null;
       final onboardingDone = prefs.getBool('onboarding_done') ?? false;
-      final loggedIn      = auth.isLoggedIn;
+      final loggedIn       = auth.isLoggedIn;
 
-      // شرایط باید sequential باشن — هر سطح فقط وقتی بررسی میشه که سطح قبلی ok باشه
+      // Sequential — each step only evaluated when prior steps pass
+      if (!langSet)        return loc == '/language'   ? null : '/language';
+      if (!onboardingDone) return loc == '/onboarding' ? null : '/onboarding';
+      if (!loggedIn)       return loc == '/login'      ? null : '/login';
 
-      // 1. زبان انتخاب نشده → فقط /language مجاز است
-      if (!langSet) {
-        return loc == '/language' ? null : '/language';
-      }
-
-      // 2. Onboarding انجام نشده → فقط /onboarding مجاز است
-      if (!onboardingDone) {
-        return loc == '/onboarding' ? null : '/onboarding';
-      }
-
-      // 3. لاگین نیست → فقط /login مجاز است
-      if (!loggedIn) {
-        return loc == '/login' ? null : '/login';
-      }
-
-      // 4. لاگین شده و روی صفحه اوت → برو داشبورد
+      // Logged in on auth screens → home shell
       if (loc == '/splash' || loc == '/login' ||
           loc == '/language' || loc == '/onboarding') {
-        return '/dashboard';
+        return '/home';
       }
 
       return null;
     },
     routes: [
+      // ── Auth flow ────────────────────────────────────────────────────
+      GoRoute(path: '/splash',    builder: (_, __) => const _Splash()),
+      GoRoute(path: '/language',  builder: (_, __) => const LanguageScreen()),
+      GoRoute(path: '/onboarding',builder: (_, __) => const OnboardingScreen()),
+      GoRoute(path: '/login',     builder: (_, __) => const LoginScreen()),
 
-      // ── Splash / auth flow ─────────────────────────────────────────────
+      // ── Main shell (bottom nav) ──────────────────────────────────────
       GoRoute(
-        path: '/splash',
-        builder: (_, __) => const _SplashScreen(),
-      ),
-      GoRoute(
-        path: '/language',
-        builder: (_, __) => const LanguageScreen(),
-      ),
-      GoRoute(
-        path: '/onboarding',
-        builder: (_, __) => const OnboardingScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
+        path: '/home',
+        builder: (_, __) => const MainShell(initialIndex: 0),
       ),
 
-      // ── Main app ───────────────────────────────────────────────────────
-      GoRoute(
-        path: '/dashboard',
-        builder: (_, __) => const DashboardScreen(),
-      ),
-      GoRoute(
-        path: '/alerts',
-        builder: (_, state) {
-          // extra = 'highlight:<id>' when navigating from push notification
-          final extra     = state.extra as String?;
-          // Store highlight ID in context extras for AlertsScreen to read
-          return const AlertsScreen();
-        },
-        routes: [
-          GoRoute(
-            path: 'add',
-            builder: (_, __) => const AddAlertScreen(),
-          ),
-          GoRoute(
-            path: 'history',
-            builder: (_, __) => const AlertHistoryScreen(),
-          ),
-        ],
-      ),
+      // Tab deep-links — open shell at the right tab
+      GoRoute(path: '/dashboard',
+          builder: (_, __) => const MainShell(initialIndex: 0)),
+      GoRoute(path: '/alerts',
+          builder: (_, __) => const MainShell(initialIndex: 1)),
+      GoRoute(path: '/watchlist',
+          builder: (_, __) => const MainShell(initialIndex: 2)),
+      GoRoute(path: '/calendar',
+          builder: (_, __) => const MainShell(initialIndex: 3)),
+      GoRoute(path: '/trades',
+          builder: (_, __) => const MainShell(initialIndex: 4)),
 
-      // ── Watchlist ──────────────────────────────────────────────────────
+      // ── Stacked routes (push on top of shell) ───────────────────────
       GoRoute(
-        path: '/watchlist',
-        builder: (_, __) => const WatchlistScreen(),
-      ),
-
-      // ── Calendar ───────────────────────────────────────────────────────
-      GoRoute(
-        path: '/calendar',
-        builder: (_, __) => const CalendarScreen(),
-      ),
-
-      // ── Other screens ──────────────────────────────────────────────────
-      GoRoute(
-        path: '/trades',
-        builder: (_, __) => const TradesScreen(),
+        path: '/alerts/add',
+        builder: (_, __) => const _AlertsWithSheet(),
       ),
       GoRoute(
-        path: '/announcements',
-        builder: (_, __) => const AnnouncementsScreen(),
-      ),
-      GoRoute(
-        path: '/calculator',
-        builder: (_, __) => const CalculatorScreen(),
+        path: '/alerts/history',
+        builder: (_, __) => const AlertHistoryScreen(),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -134,15 +80,32 @@ class AppRouter {
   );
 }
 
-// ── Splash: invisible, just triggers redirect ─────────────────────────────────
+// Splash — invisible, just triggers redirect
+class _Splash extends StatelessWidget {
+  const _Splash();
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
+}
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
+// Open alerts tab + immediately show add sheet
+class _AlertsWithSheet extends StatefulWidget {
+  const _AlertsWithSheet();
+  @override
+  State<_AlertsWithSheet> createState() => _AlertsWithSheetState();
+}
+
+class _AlertsWithSheetState extends State<_AlertsWithSheet> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go('/alerts');
+    });
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
-  }
+  Widget build(BuildContext context) =>
+      const MainShell(initialIndex: 1);
 }
