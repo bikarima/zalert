@@ -2,7 +2,9 @@
 MorningReport — daily 08:00 Tehran briefing for all allowed groups.
 Scheduled via job_queue.run_daily(time=04:30 UTC).
 """
+import asyncio
 import logging
+from datetime import datetime
 from datetime import datetime
 
 from telegram.constants import ParseMode
@@ -31,19 +33,21 @@ class MorningReport:
             return
 
         text = await self._build()
-        sent, failed = 0, 0
 
-        for group in groups:
+        # FIX: send to all groups in parallel, not sequentially
+        async def _send(group_id: int) -> bool:
             try:
                 await context.bot.send_message(
-                    chat_id=group["group_id"], text=text, parse_mode=ParseMode.HTML
+                    chat_id=group_id, text=text, parse_mode=ParseMode.HTML
                 )
-                sent += 1
+                return True
             except Exception:
-                log.exception("failed to send morning report to group=%s", group["group_id"])
-                failed += 1
+                log.exception("failed to send morning report to group=%s", group_id)
+                return False
 
-        log.info("morning report: sent=%d failed=%d total=%d", sent, failed, len(groups))
+        results = await asyncio.gather(*[_send(g["group_id"]) for g in groups])
+        sent    = sum(results)
+        log.info("morning report: sent=%d/%d", sent, len(groups))
 
     async def _build(self) -> str:
         import config
