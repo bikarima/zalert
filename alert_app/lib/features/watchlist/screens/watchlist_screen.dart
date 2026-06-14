@@ -81,8 +81,6 @@ class WatchlistScreen extends StatelessWidget {
                   ).animate().fadeIn(delay: (i * 40).ms);
                 },
               );
-              },
-              );
             },
           ),
         ),
