@@ -45,14 +45,14 @@ class _LoginScreenState extends State<LoginScreen>
         backgroundColor: AppTheme.bg(context),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 28.h),
+            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 20.h),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(height: 28.h),
+                SizedBox(height: 16.h),
                 // App icon
                 Container(
-                  width: 76.w, height: 76.w,
+                  width: 64.w, height: 64.w,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [AppTheme.primary, Color(0xFF9C27B0)],
@@ -65,22 +65,22 @@ class _LoginScreenState extends State<LoginScreen>
                     )],
                   ),
                   child: Icon(Icons.notifications_active,
-                      size: 36.sp, color: Colors.white),
+                      size: 30.sp, color: Colors.white),
                 ).animate().scale(duration: 500.ms, curve: Curves.elasticOut),
 
-                SizedBox(height: 20.h),
+                SizedBox(height: 16.h),
                 Text(
                   lang == 'fa' ? 'خوش برگشتی' : 'Welcome Back',
-                  style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold,
+                  style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold,
                       color: AppTheme.text(context)),
                 ),
-                SizedBox(height: 6.h),
+                SizedBox(height: 4.h),
                 Text(
                   lang == 'fa' ? 'روش ورود را انتخاب کنید' : 'Choose your login method',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppTheme.textSec(context), fontSize: 13.sp),
+                  style: TextStyle(color: AppTheme.textSec(context), fontSize: 12.sp),
                 ),
-                SizedBox(height: 24.h),
+                SizedBox(height: 20.h),
 
                 // Tabs
                 Container(
@@ -98,27 +98,27 @@ class _LoginScreenState extends State<LoginScreen>
                     indicatorSize: TabBarIndicatorSize.tab,
                     labelColor: Colors.white,
                     unselectedLabelColor: AppTheme.textSec(context),
-                    labelStyle: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
+                    labelStyle: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
                     dividerColor: Colors.transparent,
                     padding: EdgeInsets.all(3.w),
                     tabs: [
                       Tab(
-                        icon: Icon(Icons.telegram, size: 16.sp),
+                        icon: Icon(Icons.telegram, size: 15.sp),
                         text: lang == 'fa' ? 'تلگرام' : 'Telegram',
-                        height: 44.h,
+                        height: 38.h,
                       ),
                       Tab(
-                        icon: Icon(Icons.phone_android, size: 16.sp),
+                        icon: Icon(Icons.phone_android, size: 15.sp),
                         text: lang == 'fa' ? 'دستگاه' : 'Device',
-                        height: 44.h,
+                        height: 38.h,
                       ),
                     ],
                   ),
                 ),
-                SizedBox(height: 20.h),
+                SizedBox(height: 16.h),
 
                 SizedBox(
-                  height: 380.h,
+                  height: 360.h,
                   child: TabBarView(
                     controller: _tabController,
                     children: [
@@ -152,7 +152,7 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
   final _nameCtrl = TextEditingController();
 
   _TelegramStep _step      = _TelegramStep.enterUserId;
-  int           _countdown = 300;  // 5 min in seconds
+  int           _countdown = 300;
   bool          _canResend = false;
   Timer?        _timer;
 
@@ -173,7 +173,7 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
       setState(() {
         if (_countdown > 0) {
           _countdown--;
-          if (_countdown == 240) _canResend = true;  // resend after 60s
+          if (_countdown == 240) _canResend = true;
         } else {
           _canResend = true;
           t.cancel();
@@ -208,7 +208,6 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
   void _goBackToStep1() {
     _timer?.cancel();
     setState(() => _step = _TelegramStep.enterUserId);
-    
   }
 
   @override
@@ -271,9 +270,8 @@ class _Step1 extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Info card
         Container(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(10.w),
           decoration: BoxDecoration(
             color: AppTheme.primary.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12.r),
@@ -282,21 +280,20 @@ class _Step1 extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.security_outlined, color: AppTheme.primary, size: 16.sp),
+              Icon(Icons.security_outlined, color: AppTheme.primary, size: 15.sp),
               SizedBox(width: 8.w),
               Expanded(child: Text(
                 lang == 'fa'
-                    ? 'برای تأیید هویت، یک کد به تلگرامت میفرسته. فقط صاحب واقعی این حساب میتونه وارد بشه.'
-                    : 'To verify your identity, a code will be sent to your Telegram. Only the real account owner can log in.',
+                    ? 'یک کد تأیید به تلگرامت ارسال میشه'
+                    : 'A verification code will be sent to your Telegram.',
                 style: TextStyle(
                     color: AppTheme.textSec(context), fontSize: 11.sp),
               )),
             ],
           ),
         ),
-        SizedBox(height: 14.h),
+        SizedBox(height: 12.h),
 
-        // Telegram ID field
         TextField(
           controller: idCtrl,
           keyboardType: TextInputType.number,
@@ -311,9 +308,8 @@ class _Step1 extends StatelessWidget {
                 color: AppTheme.primary, size: 18.sp),
           ),
         ),
-        SizedBox(height: 10.h),
+        SizedBox(height: 8.h),
 
-        // Username (optional)
         TextField(
           controller: nameCtrl,
           style: TextStyle(color: AppTheme.text(context), fontSize: 14.sp),
@@ -324,11 +320,11 @@ class _Step1 extends StatelessWidget {
                 color: AppTheme.primary, size: 18.sp),
           ),
         ),
-        SizedBox(height: 16.h),
+        SizedBox(height: 12.h),
 
         if (auth.error != null) ...[
           _ErrorBox(error: auth.error!),
-          SizedBox(height: 12.h),
+          SizedBox(height: 10.h),
         ],
 
         ElevatedButton.icon(
@@ -337,28 +333,28 @@ class _Step1 extends StatelessWidget {
               ? SizedBox(width: 16.w, height: 16.w,
                   child: const CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2))
-              : Icon(Icons.send_rounded, size: 16.sp),
-          label: Text(lang == 'fa' ? 'ارسال کد تأیید' : 'Send Verification Code'),
+              : Icon(Icons.send_rounded, size: 15.sp),
+          label: Text(lang == 'fa' ? 'ارسال کد تأیید' : 'Send Verification Code',
+              style: TextStyle(fontSize: 13.sp)),
         ),
-        SizedBox(height: 12.h),
+        SizedBox(height: 10.h),
 
-        // Help: how to find Telegram ID
         Container(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(10.w),
           decoration: BoxDecoration(
             color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12.r),
             border: Border.all(color: AppTheme.border(context)),
           ),
           child: Row(children: [
-            Icon(Icons.info_outline, color: AppTheme.primary, size: 16.sp),
+            Icon(Icons.info_outline, color: AppTheme.primary, size: 14.sp),
             SizedBox(width: 8.w),
             Expanded(child: Text(
               lang == 'fa'
                   ? 'آیدی عددی رو از @userinfobot در تلگرام بگیر'
                   : 'Get your numeric ID from @userinfobot on Telegram',
               style: TextStyle(
-                  color: AppTheme.textSec(context), fontSize: 11.sp),
+                  color: AppTheme.textSec(context), fontSize: 10.sp),
             )),
           ]),
         ),
@@ -441,9 +437,8 @@ class _Step2State extends State<_Step2> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Success hint
         Container(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(10.w),
           decoration: BoxDecoration(
             color: const Color(0xFF00C853).withOpacity(0.08),
             borderRadius: BorderRadius.circular(12.r),
@@ -453,14 +448,14 @@ class _Step2State extends State<_Step2> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(Icons.check_circle_outline,
-                  color: Color(0xFF00C853), size: 16),
+                  color: Color(0xFF00C853), size: 15),
               SizedBox(width: 8.w),
               Expanded(child: Text.rich(
                 TextSpan(
                   style: TextStyle(fontSize: 11.sp),
                   children: [
                     TextSpan(
-                      text: lang == 'fa' ? 'کد تأیید به تلگرام ' : 'Code sent to Telegram ',
+                      text: lang == 'fa' ? 'کد ارسال شد به ' : 'Code sent to ',
                       style: TextStyle(color: AppTheme.textSec(context)),
                     ),
                     TextSpan(
@@ -468,35 +463,33 @@ class _Step2State extends State<_Step2> {
                       style: const TextStyle(color: Color(0xFF00C853),
                           fontWeight: FontWeight.bold),
                     ),
-                    TextSpan(
-                      text: lang == 'fa' ? ' ارسال شد.' : ' was sent.',
-                      style: TextStyle(color: AppTheme.textSec(context)),
-                    ),
                   ],
                 ),
               )),
             ],
           ),
         ),
-        SizedBox(height: 20.h),
+        SizedBox(height: 18.h),
 
-        // OTP input boxes
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (i) => _OtpBox(
-            controller: _ctrls[i],
-            focusNode:  _nodes[i],
-            onChanged:  (v) => _onDigitChanged(i, v),
-          )),
-        ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
-        SizedBox(height: 16.h),
+        // OTP boxes — always LTR regardless of app language
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(6, (i) => _OtpBox(
+              controller: _ctrls[i],
+              focusNode:  _nodes[i],
+              onChanged:  (v) => _onDigitChanged(i, v),
+            )),
+          ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
+        ),
+        SizedBox(height: 14.h),
 
-        // Countdown timer
         Center(child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.timer_outlined,
-                size: 14.sp,
+                size: 13.sp,
                 color: widget.countdownSeconds > 0
                     ? AppTheme.primary
                     : AppTheme.textSec(context)),
@@ -504,8 +497,8 @@ class _Step2State extends State<_Step2> {
             Text(
               widget.countdownSeconds > 0
                   ? (lang == 'fa'
-                      ? 'اعتبار کد: ${widget.countdown}'
-                      : 'Code expires in: ${widget.countdown}')
+                      ? 'اعتبار: ${widget.countdown}'
+                      : 'Expires: ${widget.countdown}')
                   : (lang == 'fa' ? 'کد منقضی شد' : 'Code expired'),
               style: TextStyle(
                 fontSize: 12.sp,
@@ -516,46 +509,43 @@ class _Step2State extends State<_Step2> {
             ),
           ],
         )),
-        SizedBox(height: 16.h),
+        SizedBox(height: 14.h),
 
         if (auth.error != null) ...[
           _ErrorBox(error: auth.error!),
-          SizedBox(height: 12.h),
+          SizedBox(height: 10.h),
         ],
 
-        // Verify button
         ElevatedButton(
           onPressed: (auth.loading || !isFull) ? null : _verify,
           child: auth.loading
               ? SizedBox(width: 20.w, height: 20.w,
                   child: const CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2))
-              : Text(lang == 'fa' ? 'تأیید و ورود' : 'Verify & Sign In'),
+              : Text(lang == 'fa' ? 'تأیید و ورود' : 'Verify & Sign In',
+                  style: TextStyle(fontSize: 13.sp)),
         ),
-        SizedBox(height: 10.h),
+        SizedBox(height: 8.h),
 
-        // Resend + back row
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Back button
             TextButton.icon(
               onPressed: widget.onBack,
               icon: Icon(Icons.arrow_back_ios_rounded,
-                  size: 12.sp, color: AppTheme.textSec(context)),
+                  size: 11.sp, color: AppTheme.textSec(context)),
               label: Text(
                 lang == 'fa' ? 'تغییر شماره' : 'Change ID',
                 style: TextStyle(
-                    fontSize: 12.sp, color: AppTheme.textSec(context)),
+                    fontSize: 11.sp, color: AppTheme.textSec(context)),
               ),
             ),
-            // Resend button
             TextButton(
               onPressed: widget.canResend ? widget.onResend : null,
               child: Text(
-                lang == 'fa' ? 'ارسال مجدد کد' : 'Resend code',
+                lang == 'fa' ? 'ارسال مجدد' : 'Resend',
                 style: TextStyle(
-                  fontSize: 12.sp,
+                  fontSize: 11.sp,
                   color: widget.canResend
                       ? AppTheme.primary
                       : AppTheme.textSec(context),
@@ -587,7 +577,7 @@ class _OtpBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final filled = controller.text.isNotEmpty;
     return SizedBox(
-      width: 42.w, height: 52.h,
+      width: 38.w, height: 46.h,
       child: TextField(
         controller:      controller,
         focusNode:       focusNode,
@@ -596,7 +586,7 @@ class _OtpBox extends StatelessWidget {
         maxLength:       1,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         style: TextStyle(
-          fontSize: 22.sp, fontWeight: FontWeight.bold,
+          fontSize: 18.sp, fontWeight: FontWeight.bold,
           fontFamily: 'TexGyreAdventor',
           color: AppTheme.text(context),
         ),
@@ -659,7 +649,7 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(10.w),
           decoration: BoxDecoration(
             color: AppTheme.primary.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12.r),
@@ -668,18 +658,18 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.phone_android, color: AppTheme.primary, size: 16.sp),
+              Icon(Icons.phone_android, color: AppTheme.primary, size: 15.sp),
               SizedBox(width: 8.w),
               Expanded(child: Text(
                 lang == 'fa'
-                    ? 'ورود بدون تلگرام — یه شناسه یکتا برای دستگاه شما ساخته میشه'
-                    : 'Login without Telegram — a unique ID will be generated for your device',
+                    ? 'ورود بدون تلگرام — شناسه یکتا برای دستگاه'
+                    : 'Login without Telegram — unique device ID',
                 style: TextStyle(color: AppTheme.textSec(context), fontSize: 11.sp),
               )),
             ],
           ),
         ),
-        SizedBox(height: 14.h),
+        SizedBox(height: 12.h),
         TextField(
           controller: _nameCtrl,
           style: TextStyle(color: AppTheme.text(context), fontSize: 14.sp),
@@ -690,10 +680,10 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
                 color: AppTheme.primary, size: 18.sp),
           ),
         ),
-        SizedBox(height: 16.h),
+        SizedBox(height: 12.h),
         if (auth.error != null) ...[
           _ErrorBox(error: auth.error!),
-          SizedBox(height: 12.h),
+          SizedBox(height: 10.h),
         ],
         ElevatedButton.icon(
           onPressed: auth.loading ? null : _submit,
@@ -701,12 +691,13 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
               ? SizedBox(width: 16.w, height: 16.w,
                   child: const CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2))
-              : Icon(Icons.phone_android, size: 18.sp),
-          label: Text(lang == 'fa' ? 'ورود با دستگاه' : 'Login with Device'),
+              : Icon(Icons.phone_android, size: 16.sp),
+          label: Text(lang == 'fa' ? 'ورود با دستگاه' : 'Login with Device',
+              style: TextStyle(fontSize: 13.sp)),
         ),
-        SizedBox(height: 12.h),
+        SizedBox(height: 10.h),
         Container(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(10.w),
           decoration: BoxDecoration(
             color: AppTheme.orange.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12.r),
@@ -716,12 +707,12 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.warning_amber_outlined,
-                  color: AppTheme.orange, size: 16.sp),
+                  color: AppTheme.orange, size: 14.sp),
               SizedBox(width: 8.w),
               Expanded(child: Text(
                 lang == 'fa'
                     ? 'اگه اپ رو حذف کنی، حسابت از دست میره.'
-                    : 'If you uninstall the app, your account will be lost.',
+                    : 'Uninstalling the app will lose your account.',
                 style: TextStyle(color: AppTheme.orange, fontSize: 10.sp),
               )),
             ],
@@ -737,24 +728,30 @@ class _DeviceLoginTabState extends State<_DeviceLoginTab> {
 class _ErrorBox extends StatelessWidget {
   final String error;
   const _ErrorBox({required this.error});
+
+  String get _short {
+    // Truncate at 80 chars to keep the box compact
+    if (error.length <= 80) return error;
+    return error.substring(0, 77) + '...';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(12.w),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
       decoration: BoxDecoration(
         color: AppTheme.red.withOpacity(0.1),
         borderRadius: BorderRadius.circular(10.r),
         border: Border.all(color: AppTheme.red.withOpacity(0.3)),
       ),
       child: Row(children: [
-        Icon(Icons.error_outline, color: AppTheme.red, size: 16.sp),
+        Icon(Icons.error_outline, color: AppTheme.red, size: 15.sp),
         SizedBox(width: 8.w),
-        Expanded(child: Text(error,
-            style: TextStyle(color: AppTheme.red, fontSize: 12.sp))),
+        Expanded(child: Text(_short,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: AppTheme.red, fontSize: 11.sp))),
       ]),
     );
   }
 }
-
-// Extension to clear error from outside
-// auth error is cleared by calling requestOtp again
