@@ -60,16 +60,22 @@ class WatchlistScreen extends StatelessWidget {
               if (provider.loading) {
                 return const ShimmerList(count: 6);
               }
-              if (provider.items.isEmpty) {
+              // Capture snapshot once — prevents race between itemCount and itemBuilder
+              final items = provider.items;
+              if (items.isEmpty) {
                 return _EmptyWatchlist(lang: lang, isDark: isDark,
                     onAdd: () => _showAddSheet(context, lang, isDark));
               }
               return ReorderableListView.builder(
                 padding: EdgeInsets.symmetric(vertical: 8.h),
-                itemCount: provider.items.length,
+                itemCount: items.length,
                 onReorder: provider.reorder,
                 itemBuilder: (_, i) {
-                  final item = provider.items[i];
+                  // Guard against concurrent modifications during drag
+                  if (i >= items.length) {
+                    return SizedBox.shrink(key: ValueKey('__gap_$i'));
+                  }
+                  final item = items[i];
                   return _WatchlistTile(
                     key: ValueKey(item.symbol),
                     item: item,
