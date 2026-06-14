@@ -171,7 +171,7 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       setState(() {
-        if (widget.countdownSeconds > 0) {
+        if (_countdown > 0) {
           _countdown--;
           if (_countdown == 240) _canResend = true;  // resend after 60s
         } else {
@@ -376,6 +376,7 @@ class _Step2 extends StatefulWidget {
     required this.username,
     required this.lang,
     required this.countdown,
+    required this.countdownSeconds,
     required this.canResend,
     required this.onResend,
     required this.onBack,
@@ -386,6 +387,7 @@ class _Step2 extends StatefulWidget {
   final String username;
   final String lang;
   final String countdown;
+  final int    countdownSeconds;
   final bool    canResend;
   final VoidCallback onResend;
   final VoidCallback onBack;
