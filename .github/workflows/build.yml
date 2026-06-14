@@ -2,10 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ '**' ]
+    branches: [ '**' ]          # همه branch‌ها
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ main, master ]  # PR روی main هم trigger میشه
+  workflow_dispatch:             # اجرای دستی از GitHub UI
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,6 +36,10 @@ jobs:
       - name: Verify google-services.json
         run: cat alert_app/android/app/google-services.json | python3 -c "import sys,json; json.load(sys.stdin); print('google-services.json is valid')"
 
+      - name: Set branch slug
+        id: slug
+        run: echo "name=$(echo '${{ github.ref_name }}' | sed 's|/|-|g')" >> $GITHUB_OUTPUT
+
       - name: Flutter pub get
         working-directory: alert_app
         run: flutter pub get
@@ -47,7 +51,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: "apk-${{ github.ref_name }}-${{ github.run_number }}"
+          name: apk-${{ steps.slug.outputs.name }}-${{ github.run_number }}
           path: alert_app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
