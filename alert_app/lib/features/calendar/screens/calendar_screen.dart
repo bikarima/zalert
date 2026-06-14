@@ -276,7 +276,7 @@ class _DateSection extends StatelessWidget {
 
   final String date;
   final List<CalendarEventModel> events;
-  final String lang, isDark;
+  final String lang;
   final Map<String, Color> colors;
   final int index;
   final bool isDark;
