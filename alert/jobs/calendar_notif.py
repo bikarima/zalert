@@ -2,10 +2,15 @@
 CalendarNotifier — fires 30 min before High Impact economic events.
 Runs every 5 minutes via job_queue.run_repeating(interval=300).
 
-Deduplication: an in-memory set (_sent) holds event IDs that have
-already been notified. Keys are purged after the event is >2 hours old
-so the set never grows unbounded between restarts.
+Async correctness notes:
+  - Group sends run in parallel via asyncio.gather (not sequential).
+  - A key is added to _sent ONLY after ≥1 group was successfully notified.
+    If all sends fail the event is retried on the next tick.
+  - datetime.now(pytz.utc) replaces the deprecated datetime.utcnow().
+  - dateutil dp.parse() is CPU-bound; runs in the default thread executor
+    so it never blocks the event loop.
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Set
@@ -48,7 +53,8 @@ class CalendarNotifier:
             log.exception("failed to fetch high-impact events")
             return
 
-        now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
+        # FIX: datetime.now(pytz.utc) — replaces deprecated datetime.utcnow()
+        now_utc = datetime.now(pytz.utc)
 
         for event in events:
             if not event.get("time_utc"):
@@ -56,8 +62,10 @@ class CalendarNotifier:
 
             key = event["id"]
 
+            # FIX: dp.parse is CPU-bound — run in thread executor, never block event loop
             try:
-                event_utc = dp.parse(event["time_utc"])
+                loop      = asyncio.get_event_loop()
+                event_utc = await loop.run_in_executor(None, dp.parse, event["time_utc"])
                 if not event_utc.tzinfo:
                     event_utc = event_utc.replace(tzinfo=pytz.utc)
             except Exception:
@@ -68,8 +76,17 @@ class CalendarNotifier:
 
             if NOTIFY_MIN_BEFORE <= diff_min <= NOTIFY_MAX_BEFORE:
                 if key not in self._sent:
-                    self._sent.add(key)
-                    await self._notify(context, groups, event, event_utc)
+                    # FIX: add to _sent ONLY after ≥1 successful send.
+                    # If all sends fail we leave key out of _sent so the next
+                    # tick retries — as long as it’s still in the 25–35 min window.
+                    sent_count = await self._notify(context, groups, event, event_utc)
+                    if sent_count > 0:
+                        self._sent.add(key)
+                    else:
+                        log.warning(
+                            "all sends failed for event=%s — will retry next tick",
+                            event["title"],
+                        )
 
             elif diff_min < CLEANUP_AFTER:
                 self._sent.discard(key)   # keep set from growing
@@ -80,7 +97,11 @@ class CalendarNotifier:
         groups: list,
         event: dict,
         event_utc: datetime,
-    ) -> None:
+    ) -> int:
+        """
+        Send notification to all groups in parallel.
+        Returns the number of successful sends.
+        """
         et = event_utc.astimezone(TEHRAN).strftime("%H:%M")
 
         text = (
@@ -97,17 +118,21 @@ class CalendarNotifier:
             )
         text += "\n\n⚠️ مراقب نوسانات باشید!"
 
-        sent = 0
-        for group in groups:
+        # FIX: send to all groups in parallel, not sequentially
+        async def _send(group_id: int) -> bool:
             try:
                 await context.bot.send_message(
-                    chat_id=group["group_id"], text=text, parse_mode=ParseMode.HTML
+                    chat_id=group_id, text=text, parse_mode=ParseMode.HTML
                 )
-                sent += 1
+                return True
             except Exception:
-                log.exception("failed to notify group=%s", group["group_id"])
+                log.exception("failed to notify group=%s", group_id)
+                return False
 
+        results   = await asyncio.gather(*[_send(g["group_id"]) for g in groups])
+        sent      = sum(results)
         log.info(
             "calendar notif: event=%s groups=%d/%d",
             event["title"], sent, len(groups),
         )
+        return sent
