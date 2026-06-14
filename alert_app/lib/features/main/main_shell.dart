@@ -31,7 +31,7 @@ class _MainShellState extends State<MainShell>
     _Tab(icon: Icons.notifications_rounded,  label: ('آلرت‌ها', 'Alerts')),
     _Tab(icon: Icons.show_chart_rounded,     label: ('بازار', 'Market')),
     _Tab(icon: Icons.calendar_month_rounded, label: ('تقویم', 'Calendar')),
-    _Tab(icon: Icons.person_rounded,         label: ('معاملات', 'Trades')),
+    _Tab(icon: Icons.candlestick_chart_rounded, label: ('معاملات', 'Trades')),
   ];
 
   @override
