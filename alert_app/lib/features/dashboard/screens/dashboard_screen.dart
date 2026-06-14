@@ -228,9 +228,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onPressed: () => ctx.read<ThemeProvider>().toggle(),
         ),
         IconButton(
-          icon: Icon(Icons.person_outline_rounded,
+          icon: Icon(Icons.settings_outlined,
               color: isDark ? Colors.white70 : Colors.black54),
-          onPressed: () => ctx.go('/alerts'),
+          onPressed: () => ctx.push('/settings'),
         ),
         SizedBox(width: 4.w),
       ],
