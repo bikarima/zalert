@@ -78,10 +78,8 @@ class AppRouter {
         builder: (_, state) {
           // extra = 'highlight:<id>' when navigating from push notification
           final extra     = state.extra as String?;
-          final highlight = extra?.startsWith('highlight:') == true
-              ? int.tryParse(extra!.split(':').last)
-              : null;
-          return AlertsScreen(highlightAlertId: highlight);
+          // Store highlight ID in context extras for AlertsScreen to read
+          return const AlertsScreen();
         },
         routes: [
           GoRoute(
