@@ -30,6 +30,12 @@ mt5 = MT5Handler()
 
 TEHRAN = pytz.timezone('Asia/Tehran')
 
+# ردیابی زمان شروع برای uptime
+_start_time = datetime.now(TEHRAN)
+
+# جلوگیری از ارسال تکراری نوتیف تقویم
+_sent_calendar_notifs: set = set()
+
 # نمادهای محبوب
 POPULAR_SYMBOLS = [
     ("🥇 طلا",    "XAUUSD"),
@@ -89,6 +95,12 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📅 تقویم امروز",  callback_data="menu_calendar"),
         ],
         [
+            InlineKeyboardButton("📊 آمار کل",      callback_data="menu_stats"),
+            InlineKeyboardButton("👤 پروفایل من",    callback_data="menu_profile"),
+        ],
+        [
+            InlineKeyboardButton("🖥 وضعیت سرور", callback_data="menu_status"),
+        ],
             InlineKeyboardButton("📊 آمار کل",      callback_data="menu_stats"),
             InlineKeyboardButton("👤 پروفایل من",    callback_data="menu_profile"),
         ],
@@ -450,6 +462,157 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=back_main_keyboard())
 
+# ─── /status ─────────────────────────────────────────────────────────────────────────
+
+async def server_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await can_use_bot(update):
+        return
+    await _send_status(update.message.reply_text)
+
+async def _send_status(reply_fn):
+    mt5_ok    = mt5.initialized
+    mt5_str   = "🟢 متصل" if mt5_ok else "🔴 قطع"
+    try:
+        await db.get_stats()
+        db_str = "🟢 آنلاین"
+    except Exception:
+        db_str = "🔴 خطا"
+    elapsed    = datetime.now(TEHRAN) - _start_time
+    total_s    = int(elapsed.total_seconds())
+    h, r       = divmod(total_s, 3600)
+    m, s       = divmod(r, 60)
+    uptime_str = f"{h}h {m}m {s}s"
+    stats_data   = await db.get_stats()
+    total_alerts = sum(stats_data.values()) if stats_data else 0
+    gold     = mt5.get_price("XAUUSD")
+    gold_str = f"<code>{fmt_price(gold)}</code>" if gold else "—"
+    text = (
+        f"🖥 <b>وضعیت سرور ZAlert</b>\n\n"
+        f"{'─'*28}\n"
+        f"🔌 MT5: {mt5_str}\n"
+        f"🗄 دیتابیس: {db_str}\n"
+        f"⏱ آپتایم: <b>{uptime_str}</b>\n"
+        f"{'─'*28}\n"
+        f"📊 آلرت‌های فعال: <b>{total_alerts}</b>\n"
+        f"⏰ بررسی هر: <b>{config.CHECK_INTERVAL}s</b>\n"
+        f"🥇 XAUUSD: {gold_str}\n"
+        f"{'─'*28}\n"
+        f"🕐 سرور: {now_tehran_full()}"
+    )
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔄 بروزرسانی", callback_data="menu_status"),
+        InlineKeyboardButton("🏠 منوی اصلی", callback_data="back_main"),
+    ]])
+    await reply_fn(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+
+# ─── گزارش صبحگاهی ───────────────────────────────────────────────────────
+
+async def morning_report(context: ContextTypes.DEFAULT_TYPE):
+    """گزارش صبحگاهی — هر روز ساعت ۸ صبح تهران (04:30 UTC)"""
+    groups = await db.get_all_groups()
+    if not groups:
+        return
+    stats_data   = await db.get_stats()
+    total_alerts = sum(stats_data.values()) if stats_data else 0
+    try:
+        events      = await get_today_events(user_tz='Asia/Tehran')
+        high_events = [e for e in events if e['impact'] == 'high']
+    except Exception:
+        events = high_events = []
+    day_names = {0: 'دوشنبه', 1: 'سه‌شنبه', 2: 'چهارشنبه',
+                 3: 'پنج‌شنبه', 4: 'جمعه', 5: 'شنبه', 6: 'یکشنبه'}
+    now_th  = datetime.now(TEHRAN)
+    weekday = day_names.get(now_th.weekday(), '')
+    today   = now_th.strftime('%Y-%m-%d')
+    lines = [
+        f"🌅 <b>گزارش صبحگاهی ZAlert</b>\n",
+        f"📅 {weekday} — {today}\n",
+        f"{'─'*28}",
+        f"📊 آلرت‌های فعال سیستم: <b>{total_alerts}</b>",
+    ]
+    if stats_data:
+        lines.append("🔝 پرطرفدارترین نمادها:")
+        for sym, cnt in list(stats_data.items())[:3]:
+            lines.append(f"  • {sym}: {cnt} آلرت")
+    lines.append(f"{'─'*28}")
+    if high_events:
+        lines.append(f"\n🔴 <b>رویدادهای مهم امروز ({len(high_events)} رویداد):</b>")
+        for e in high_events[:6]:
+            lines.append(f"  🔴 {e['time']} — <b>{e['title']}</b> ({e['currency']})")
+    else:
+        lines.append("\n✅ امروز رویداد High Impact نداریم — بازار آرومه!")
+    prices = []
+    for _, sym in POPULAR_SYMBOLS[:4]:
+        p = mt5.get_price(sym)
+        if p:
+            prices.append(f"  <code>{sym:<10}</code> {fmt_price(p)}")
+    if prices:
+        lines += [f"\n{'─'*28}", "💹 قیمت لحظه‌ای:"] + prices
+    lines += [f"\n{'─'*28}", "💡 معامله خوب! 🚀"]
+    text = "\n".join(lines)
+    for group in groups:
+        try:
+            await context.bot.send_message(
+                chat_id=group['group_id'], text=text, parse_mode=ParseMode.HTML
+            )
+        except Exception as e:
+            print(f"[Morning] خطا در ارسال به {group['group_id']}: {e}")
+
+
+# ─── نوتیف تقویم ──────────────────────────────────────────────────────────────────
+
+async def calendar_notifier(context: ContextTypes.DEFAULT_TYPE):
+    """هر ۵ دقیقه — ۳۰ دقیقه قبل از High Impact هشدار میده"""
+    global _sent_calendar_notifs
+    groups = await db.get_all_groups()
+    if not groups:
+        return
+    try:
+        events = await get_high_impact_events(user_tz='Asia/Tehran')
+    except Exception as e:
+        print(f"[CalNotif] خطا: {e}")
+        return
+    from dateutil import parser as dp
+    now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
+    for e in events:
+        if not e.get('time_utc'):
+            continue
+        key = e['id']
+        if key in _sent_calendar_notifs:
+            continue
+        try:
+            event_utc = dp.parse(e['time_utc'])
+            if not event_utc.tzinfo:
+                event_utc = event_utc.replace(tzinfo=pytz.utc)
+        except Exception:
+            continue
+        diff_min = (event_utc - now_utc).total_seconds() / 60
+        if 25 <= diff_min <= 35:
+            _sent_calendar_notifs.add(key)
+            et = event_utc.astimezone(TEHRAN).strftime('%H:%M')
+            text = (
+                f"📅 <b>هشدار تقویم اقتصادی!</b>\n\n"
+                f"🔴 <b>{e['title']}</b>\n"
+                f"🌍 کشور: <b>{e['currency']}</b>\n"
+                f"🕐 ساعت: <b>{et}</b> (تهران)\n"
+                f"⏰ تا شروع: <b>~۳۰ دقیقه</b>"
+            )
+            if e.get('forecast') or e.get('previous'):
+                text += f"\n📊 پیش‌بینی: <b>{e.get('forecast','—')}</b>  |قبلی: <b>{e.get('previous','—')}</b>"
+            text += "\n\n⚠️ مراقب نوسانات باشید!"
+            for group in groups:
+                try:
+                    await context.bot.send_message(
+                        chat_id=group['group_id'], text=text, parse_mode=ParseMode.HTML
+                    )
+                except Exception as ex:
+                    print(f"[CalNotif] خطا {group['group_id']}: {ex}")
+        elif diff_min < -120:
+            _sent_calendar_notifs.discard(key)
+
+
+
 # ─── دستورات ادمین ───────────────────────────────────────────────────────────
 
 async def add_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -751,6 +914,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=back_main_keyboard())
 
+    # ── وضعیت سرور ────────────────────────────────────────────────
+    elif data == "menu_status":
+        await query.edit_message_text("⏳ در حال بررسی...", parse_mode=ParseMode.HTML)
+        await _send_status(query.edit_message_text)
+
 # ─── چک کردن آلرت‌ها (پس‌زمینه) ─────────────────────────────────────────────
 
 async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
@@ -828,6 +996,7 @@ def main():
     app.add_handler(CommandHandler("clear",   clear_alerts))
     app.add_handler(CommandHandler("stats",   stats))
     app.add_handler(CommandHandler("history", history))
+    app.add_handler(CommandHandler("status",  server_status))
 
     # دستورات ادمین
     app.add_handler(CommandHandler("addgroup",    add_group))
@@ -838,6 +1007,10 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_handler))
 
     # تسک پس‌زمینه
+    import datetime as dt
+    app.job_queue.run_repeating(check_alerts,      interval=config.CHECK_INTERVAL, first=10)
+    app.job_queue.run_repeating(calendar_notifier, interval=300, first=60)          # هر ۵ دقیقه
+    app.job_queue.run_daily(morning_report,        time=dt.time(4, 30, tzinfo=pytz.utc))  # ۸ صبح تهران
     app.job_queue.run_repeating(check_alerts, interval=config.CHECK_INTERVAL, first=10)
 
     # API
