@@ -66,15 +66,11 @@ class WatchlistScreen extends StatelessWidget {
                 return _EmptyWatchlist(lang: lang, isDark: isDark,
                     onAdd: () => _showAddSheet(context, lang, isDark));
               }
-              return ReorderableListView.builder(
-                padding: EdgeInsets.symmetric(vertical: 8.h),
+              return ListView.builder(
+                padding: EdgeInsets.fromLTRB(0, 8.h, 0, 100.h),
                 itemCount: items.length,
-                onReorder: provider.reorder,
                 itemBuilder: (_, i) {
-                  // Guard against concurrent modifications during drag
-                  if (i >= items.length) {
-                    return SizedBox.shrink(key: ValueKey('__gap_$i'));
-                  }
+                  if (i >= items.length) return const SizedBox.shrink();
                   final item = items[i];
                   return _WatchlistTile(
                     key: ValueKey(item.symbol),
@@ -84,6 +80,8 @@ class WatchlistScreen extends StatelessWidget {
                     onRemove: () => provider.removeSymbol(item.symbol),
                   ).animate().fadeIn(delay: (i * 40).ms);
                 },
+              );
+              },
               );
             },
           ),
