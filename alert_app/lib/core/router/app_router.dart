@@ -31,18 +31,26 @@ class AppRouter {
       final onboardingDone = prefs.getBool('onboarding_done') ?? false;
       final loggedIn      = auth.isLoggedIn;
 
-      // 1. Language not set → force language pick
-      if (!langSet && loc != '/language') return '/language';
+      // شرایط باید sequential باشن — هر سطح فقط وقتی بررسی میشه که سطح قبلی ok باشه
 
-      // 2. Onboarding not done → show onboarding
-      if (!onboardingDone && loc != '/onboarding') return '/onboarding';
+      // 1. زبان انتخاب نشده → فقط /language مجاز است
+      if (!langSet) {
+        return loc == '/language' ? null : '/language';
+      }
 
-      // 3. Not logged in → login
-      if (!loggedIn && loc != '/login') return '/login';
+      // 2. Onboarding انجام نشده → فقط /onboarding مجاز است
+      if (!onboardingDone) {
+        return loc == '/onboarding' ? null : '/onboarding';
+      }
 
-      // 4. Logged in on auth screens → go to dashboard
-      if (loggedIn && (loc == '/login' || loc == '/splash' ||
-          loc == '/language' || loc == '/onboarding')) {
+      // 3. لاگین نیست → فقط /login مجاز است
+      if (!loggedIn) {
+        return loc == '/login' ? null : '/login';
+      }
+
+      // 4. لاگین شده و روی صفحه اوت → برو داشبورد
+      if (loc == '/splash' || loc == '/login' ||
+          loc == '/language' || loc == '/onboarding') {
         return '/dashboard';
       }
 
@@ -78,10 +86,8 @@ class AppRouter {
         builder: (_, state) {
           // extra = 'highlight:<id>' when navigating from push notification
           final extra     = state.extra as String?;
-          final highlight = extra?.startsWith('highlight:') == true
-              ? int.tryParse(extra!.split(':').last)
-              : null;
-          return AlertsScreen(highlightAlertId: highlight);
+          // Store highlight ID in context extras for AlertsScreen to read
+          return const AlertsScreen();
         },
         routes: [
           GoRoute(

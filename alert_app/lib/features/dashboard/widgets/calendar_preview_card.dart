@@ -61,7 +61,7 @@ class CalendarPreviewCard extends StatelessWidget {
                 padding: EdgeInsets.all(12.r),
                 itemCount: show.length,
                 separatorBuilder: (_, __) => Divider(
-                  height: 1, color: isDark ? Colors.white10 : Colors.black05,
+                  height: 1, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
                 ),
                 itemBuilder: (_, i) {
                   final e = show[i];

@@ -56,8 +56,8 @@ class ZAlertApp extends StatelessWidget {
             builder: (_, __) => MaterialApp.router(
               title: 'ZAlert',
               debugShowCheckedModeBanner: false,
-              theme:      AppTheme.lightTheme,
-              darkTheme:  AppTheme.darkTheme,
+              theme:      AppTheme.light,
+              darkTheme:  AppTheme.dark,
               themeMode:  themeProvider.isDark ? ThemeMode.dark : ThemeMode.light,
               routerConfig: AppRouter.router,
               locale: Locale(localeProvider.lang),

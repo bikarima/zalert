@@ -208,7 +208,7 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
   void _goBackToStep1() {
     _timer?.cancel();
     setState(() => _step = _TelegramStep.enterUserId);
-    context.read<AuthProvider>().._clearError();
+    
   }
 
   @override
@@ -238,6 +238,7 @@ class _TelegramLoginTabState extends State<_TelegramLoginTab> {
               username:  _nameCtrl.text,
               lang:      widget.lang,
               countdown: _countdownText,
+              countdownSeconds: _countdown,
               canResend: _canResend,
               onResend:  _resendCode,
               onBack:    _goBackToStep1,
@@ -375,6 +376,7 @@ class _Step2 extends StatefulWidget {
     required this.username,
     required this.lang,
     required this.countdown,
+    required this.countdownSeconds,
     required this.canResend,
     required this.onResend,
     required this.onBack,
@@ -385,7 +387,8 @@ class _Step2 extends StatefulWidget {
   final String username;
   final String lang;
   final String countdown;
-  final bool   canResend;
+  final int    countdownSeconds;
+  final bool    canResend;
   final VoidCallback onResend;
   final VoidCallback onBack;
   final VoidCallback onVerified;
@@ -494,19 +497,19 @@ class _Step2State extends State<_Step2> {
           children: [
             Icon(Icons.timer_outlined,
                 size: 14.sp,
-                color: _countdown > 0
+                color: widget.countdownSeconds > 0
                     ? AppTheme.primary
                     : AppTheme.textSec(context)),
             SizedBox(width: 4.w),
             Text(
-              _countdown > 0
+              widget.countdownSeconds > 0
                   ? (lang == 'fa'
                       ? 'اعتبار کد: ${widget.countdown}'
                       : 'Code expires in: ${widget.countdown}')
                   : (lang == 'fa' ? 'کد منقضی شد' : 'Code expired'),
               style: TextStyle(
                 fontSize: 12.sp,
-                color: _countdown > 0 ? AppTheme.primary : AppTheme.textSec(context),
+                color: widget.countdownSeconds > 0 ? AppTheme.primary : AppTheme.textSec(context),
                 fontWeight: FontWeight.w600,
                 fontFamily: 'TexGyreAdventor',
               ),
@@ -754,9 +757,4 @@ class _ErrorBox extends StatelessWidget {
 }
 
 // Extension to clear error from outside
-extension _AuthProviderExt on AuthProvider {
-  void _clearError() {
-    // ignore: invalid_use_of_protected_member
-    notifyListeners();
-  }
-}
+// auth error is cleared by calling requestOtp again

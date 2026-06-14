@@ -15,16 +15,30 @@ import pytz
 import motor.motor_asyncio
 import config
 
-_client = None
-_db     = None
+# هر event loop کلاینت motor جداگانه خودشو داره
+# دلیل: uvicorn در thread جدا اجرا میشه و loop متفاوتی داره — اگه کلاینت رو بین‌شون شیر میکنه
+_loop_clients: dict = {}
 
 
 def get_db():
-    global _client, _db
-    if _client is None:
-        _client = motor.motor_asyncio.AsyncIOMotorClient(config.MONGO_URI)
-        _db     = _client[config.MONGO_DB]
-    return _db
+    """
+    ارتباط motor برای event loop جاری — loop-aware singleton.
+    بات کلاینت همیشه به loop همان تردی که درش ساخته شده — خطای
+    'Future attached to a different loop' دیگه نمییاد.
+    """
+    import asyncio
+    try:
+        loop    = asyncio.get_running_loop()
+        loop_id = id(loop)
+    except RuntimeError:
+        loop_id = 0   # not inside an async context
+
+    if loop_id not in _loop_clients:
+        client = motor.motor_asyncio.AsyncIOMotorClient(config.MONGO_URI)
+        _loop_clients[loop_id] = (client, client[config.MONGO_DB])
+
+    return _loop_clients[loop_id][1]
+
 
 
 def _now() -> str:

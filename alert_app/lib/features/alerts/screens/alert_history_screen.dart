@@ -91,7 +91,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         ),
         body: RefreshIndicator(
           onRefresh: _load,
-          color: AppTheme.primaryGold,
+          color: AppTheme.primary,
           child: _loading
               ? const ShimmerList(count: 5)
               : hist.isEmpty
@@ -147,14 +147,14 @@ class _DateGroup extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGold.withOpacity(0.12),
+                  color: AppTheme.primary.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
                 child: Text(
                   date,
                   style: TextStyle(
                     fontSize: 11.sp, fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryGold,
+                    color: AppTheme.primary,
                     fontFamily: 'TexGyreAdventor',
                   ),
                 ),
@@ -252,7 +252,7 @@ class _HistoryTile extends StatelessWidget {
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white10 : Colors.black05,
+                          color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(4.r),
                         ),
                         child: Text(

@@ -45,7 +45,7 @@ class WatchlistScreen extends StatelessWidget {
             // Add symbol button
             IconButton(
               icon: Icon(Icons.add_rounded,
-                  color: AppTheme.primaryGold, size: 22.sp),
+                  color: AppTheme.primary, size: 22.sp),
               tooltip: lang == 'fa' ? 'افزودن نماد' : 'Add symbol',
               onPressed: () => _showAddSheet(context, lang, isDark),
             ),
@@ -54,7 +54,7 @@ class WatchlistScreen extends StatelessWidget {
         ),
         body: RefreshIndicator(
           onRefresh: () => context.read<WatchlistProvider>().refreshPrices(),
-          color: AppTheme.primaryGold,
+          color: AppTheme.primary,
           child: Consumer<WatchlistProvider>(
             builder: (_, provider, __) {
               if (provider.loading) {
@@ -125,7 +125,7 @@ class WatchlistScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12.r),
                   borderSide: BorderSide.none,
                 ),
-                prefixIcon: Icon(Icons.search, color: AppTheme.primaryGold),
+                prefixIcon: Icon(Icons.search, color: AppTheme.primary),
               ),
             ),
             SizedBox(height: 12.h),
@@ -159,7 +159,7 @@ class WatchlistScreen extends StatelessWidget {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryGold,
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.r)),
@@ -331,7 +331,7 @@ class _EmptyWatchlist extends StatelessWidget {
             icon: const Icon(Icons.add),
             label: Text(lang == 'fa' ? 'افزودن نماد' : 'Add Symbol'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryGold,
+              backgroundColor: AppTheme.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r)),

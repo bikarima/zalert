@@ -175,6 +175,34 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+
+  // ── Link device account to Telegram ──────────────────────────────────────
+
+  Future<bool> linkToTelegram(int telegramId) async {
+    _loading = true;
+    _error   = null;
+    notifyListeners();
+    try {
+      final pushToken  = NotificationService.instance.fcmToken;
+      final deviceName = await _deviceName();
+      final platform   = await _platform();
+      await ApiService.instance.register(
+        userId: telegramId, username: _username,
+        pushToken: pushToken, platform: platform, deviceName: deviceName,
+      );
+      await StorageService.instance.saveUser(
+          telegramId, _username ?? telegramId.toString());
+      _userId  = telegramId;
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error   = _extractError(e);
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
   // ── Logout ────────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
