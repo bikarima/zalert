@@ -50,7 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final auth = context.read<AuthProvider>();
       if (auth.userId != null) {
         context.read<AlertProvider>().loadAlerts(auth.userId!);
-        context.read<CalendarProvider>().loadEvents();
+        context.read<CalendarProvider>().load();
       }
     });
   }
@@ -100,10 +100,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final auth = context.read<AuthProvider>();
             if (auth.userId != null) {
               await context.read<AlertProvider>().loadAlerts(auth.userId!);
-              await context.read<CalendarProvider>().loadEvents();
+              await context.read<CalendarProvider>().load();
             }
           },
-          color: AppTheme.primaryGold,
+          color: AppTheme.primary,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -197,7 +197,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(
               fontSize: 22.sp,
               fontWeight: FontWeight.bold,
-              color: AppTheme.primaryGold,
+              color: AppTheme.primary,
               fontFamily: 'TexGyreAdventor',
             ),
           ),
@@ -205,14 +205,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
             decoration: BoxDecoration(
-              color: AppTheme.primaryGold.withOpacity(0.15),
+              color: AppTheme.primary.withOpacity(0.15),
               borderRadius: BorderRadius.circular(6.r),
             ),
             child: Text(
               lang == 'fa' ? 'داشبورد' : 'Dashboard',
               style: TextStyle(
                 fontSize: 11.sp,
-                color: AppTheme.primaryGold,
+                color: AppTheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -283,7 +283,7 @@ class _SectionHeader extends StatelessWidget {
               seeAllLabel,
               style: TextStyle(
                 fontSize: 12.sp,
-                color: AppTheme.primaryGold,
+                color: AppTheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
