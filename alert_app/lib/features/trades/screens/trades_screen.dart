@@ -550,7 +550,6 @@ class _AddTradeSheetState extends State<_AddTradeSheet> {
         symbol:     _symCtrl.text.trim().toUpperCase(),
         type:       _isBuy ? 'buy' : 'sell',
         entry:      double.tryParse(_entryCtrl.text) ?? 0,
-        exit:       double.tryParse(_exitCtrl.text),
         lotSize:    double.tryParse(_lotCtrl.text) ?? 0.1,
         stopLoss:   double.tryParse(_slCtrl.text),
         takeProfit: double.tryParse(_tpCtrl.text),
