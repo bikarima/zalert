@@ -25,8 +25,17 @@ class WatchlistProvider extends ChangeNotifier {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   Future<void> _init() async {
-    await _loadFromPrefs();
-    await refreshPrices();
+    try {
+      await _loadFromPrefs();
+    } catch (_) {
+      _items = List.of(WatchlistItem.defaults);
+    }
+    try {
+      await refreshPrices();
+    } catch (_) {
+      _loading = false;
+      notifyListeners();
+    }
     _timer = Timer.periodic(_refreshInterval, (_) => refreshPrices());
   }
 
