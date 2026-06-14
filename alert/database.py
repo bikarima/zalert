@@ -117,6 +117,13 @@ class Database:
         )
         return r.deleted_count > 0
 
+    async def remove_device_by_token(self, push_token: str) -> bool:
+        """حذف دستگاه فقط با push token — بدون نیاز به user_id.
+        برای cleanup خودکار توکن‌های expired/invalid که FCM برمیگردونه."""
+        r = await get_db().user_devices.delete_one({"push_token": push_token})
+        return r.deleted_count > 0
+
+
     async def remove_all_devices(self, user_id: int) -> int:
         r = await get_db().user_devices.delete_many({"user_id": user_id})
         return r.deleted_count
