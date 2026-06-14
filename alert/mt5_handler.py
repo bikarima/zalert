@@ -1,42 +1,59 @@
+import logging
 import MetaTrader5 as mt5
 from typing import Optional, List
 import config
 
+log = logging.getLogger("MT5Handler")
+
 # نگاشت نمادهای رایج به نمادهای جایگزین
 # اگه نماد اصلی پیدا نشد، از این لیست جستجو میکنیم
+# نکته: الیاسها با توجه به بروکر متفاوت دارن — اگه قیمت اشتباهه نماد واقعی بروکرت رو بهش اضافه کن
+# SYMBOL_ALIASES دیکشنری SYMBOL_OVERRIDES برای اینکه مستقیماً بگی نماد واقعی رو مپن
+# مثل: SYMBOL_OVERRIDES = {'BTCUSD': 'BTCUSD#', 'USOIL': 'XTIUSD'}
+SYMBOL_OVERRIDES: dict[str, str] = {
+    # نماد رو به شکل واقعیش در بروکر بنویس
+    # مثال: 'BTCUSD': 'BTCUSD#'
+}
+
 SYMBOL_ALIASES = {
-    'BTCUSD': ['BTC', 'BTCUSD.', 'XBTUSD', 'BTC/USD'],
-    'ETHUSD': ['ETH', 'ETHUSD.', 'ETH/USD'],
-    'LTCUSD': ['LTC', 'LTCUSD.'],
-    'XRPUSD': ['XRP', 'XRPUSD.'],
-    'US500':  ['US500', 'SPX500', 'SP500', 'USIDX', 'US500M', 'SPXC'],
-    'US30':   ['US30', 'DOW', 'US30M', 'DJIA'],
-    'NAS100': ['NAS100', 'NASDAQ', 'US100', 'NDX', 'SNDX'],
-    'DAX40':  ['DAX40', 'DAX', 'GER40', 'GDAXIm'],
-    'USOIL':  ['WTI', 'USOIL', 'OIL', 'WTID', 'OILU'],
-    'UKOIL':  ['UKOIL', 'BRENT', 'UKOUSD'],
-    'XAUUSD': ['XAUUSD', 'GOLD', 'GOLDUSD', 'XAUUSD.'],
-    'XAGUSD': ['XAGUSD', 'SILVER', 'SILVERUSD'],
+    'BTCUSD': ['BTCUSD.', 'XBTUSD', 'BTCUSD#', 'BTC/USD', 'BTC'],
+    'ETHUSD': ['ETHUSD.', 'ETHUSD#', 'ETH/USD', 'ETH'],
+    'LTCUSD': ['LTCUSD.', 'LTC'],
+    'XRPUSD': ['XRPUSD.', 'XRP'],
+    'US500':  ['SPX500', 'SP500', 'US500.', 'US500M', 'SPXUSD', 'SPXC', 'USIDX'],
+    'US30':   ['DOW', 'US30.', 'US30M', 'DJIA'],
+    'NAS100': ['US100', 'NASDAQ', 'NDX', 'NAS100.', 'SNDX'],
+    'DAX40':  ['DAX', 'GER40', 'GDAXIm'],
+    'USOIL':  ['WTI', 'XTIUSD', 'USOIL.', 'OILUSD', 'OIL', 'WTID', 'OILU'],
+    'UKOIL':  ['BRENT', 'UKOUSD', 'UKOIL.'],
+    'XAUUSD': ['XAUUSD.', 'GOLD', 'GOLDUSD', 'XAUUSD#'],
+    'XAGUSD': ['XAGUSD.', 'SILVER', 'SILVERUSD'],
 }
 
 
 class MT5Handler:
     def __init__(self):
-        self.initialized = False
-        self._symbol_cache = {}  # cache resolved symbols
+        self.initialized   = False
+        self._symbol_cache: dict[str, str] = {}
+        self._symbols_cache: list[str]     = []
+        self._init_count   = 0   # تعداد دفعات اتصال
 
     def initialize(self) -> bool:
         if not mt5.initialize(timeout=config.MT5_TIMEOUT, portable=config.MT5_PORTABLE):
-            print(f"خطا در اتصال به MT5: {mt5.last_error()}")
+            log.error("MT5 init failed: %s", mt5.last_error())
             return False
-        self.initialized    = True
-        self._symbols_cache = []  # reset cache
-        print("✅ اتصال به MT5 برقرار شد")
+        self.initialized     = True
+        self._symbols_cache  = []   # reset symbol list cache on reconnect
+        self._init_count    += 1
+        if self._init_count == 1:
+            log.info("✅ MT5 متصل شد")
+        else:
+            log.debug("اتصال مجدد به MT5 (#%d)", self._init_count)
         return True
 
     def _get_all_symbol_names(self) -> List[str]:
         """لیست همه نمادها — با cache"""
-        if not hasattr(self, '_symbols_cache') or not self._symbols_cache:
+        if not self._symbols_cache:
             syms = mt5.symbols_get()
             self._symbols_cache = [s.name for s in syms] if syms else []
         return self._symbols_cache
@@ -45,17 +62,22 @@ class MT5Handler:
         """
         نماد واقعی رو در MT5 پیدا میکنه.
         اولویت:
-        1. cache
-        2. تطابق دقیق
-        3. alias map
-        4. شروع با نماد
-        5. حاوی نماد
+          0. SYMBOL_OVERRIDES (مستقیم مپنی)
+          1. cache
+          2. تطابق دقیق
+          3. alias map
+          4. شروع با نماد
+          5. حاوی نماد
         """
         if not self.initialized:
             if not self.initialize():
                 return None
 
         symbol_up = symbol.upper()
+
+        # 0. override مستقیم
+        if symbol_up in SYMBOL_OVERRIDES:
+            return SYMBOL_OVERRIDES[symbol_up]
 
         # 1. cache
         if symbol_up in self._symbol_cache:
@@ -78,7 +100,8 @@ class MT5Handler:
                     if s_up == alias_up or s_up.startswith(alias_up):
                         result = all_symbols[i]
                         self._symbol_cache[symbol_up] = result
-                        print(f"نماد {symbol} → {result} (alias)")
+                        # فقط یکبار لاگ میکنیم (DEBUG نه INFO)
+                        log.debug("نماد %s → %s (alias)", symbol, result)
                         return result
 
         # 4. شروع با نماد
@@ -87,7 +110,7 @@ class MT5Handler:
             result = starts[0]
             self._symbol_cache[symbol_up] = result
             if result.upper() != symbol_up:
-                print(f"نماد {symbol} → {result} (prefix)")
+                log.debug("نماد %s → %s (prefix)", symbol, result)
             return result
 
         # 5. حاوی نماد (بیس کارنسی)
@@ -98,10 +121,10 @@ class MT5Handler:
             if contains:
                 result = contains[0]
                 self._symbol_cache[symbol_up] = result
-                print(f"نماد {symbol} → {result} (contains)")
+                log.debug("نماد %s → %s (contains)", symbol, result)
                 return result
 
-        print(f"نماد {symbol} در MT5 پیدا نشد")
+        log.warning("نماد %s در MT5 پیدا نشد", symbol)
         return None
 
     def get_price(self, symbol: str) -> Optional[float]:
@@ -120,7 +143,7 @@ class MT5Handler:
 
         tick = mt5.symbol_info_tick(real_symbol)
         if tick is None:
-            print(f"خطا در دریافت قیمت {real_symbol}: {mt5.last_error()}")
+            log.warning("خطا در دریافت قیمت %s: %s", real_symbol, mt5.last_error())
             return None
 
         return tick.bid
@@ -135,7 +158,6 @@ class MT5Handler:
                 return []
         query_up = query.upper()
         all_syms = self._get_all_symbol_names()
-        # اول exact starts_with، بعد contains
         starts   = [s for s in all_syms if s.upper().startswith(query_up)]
         contains = [s for s in all_syms if query_up in s.upper() and s not in starts]
         return (starts + contains)[:20]
@@ -144,4 +166,4 @@ class MT5Handler:
         if self.initialized:
             mt5.shutdown()
             self.initialized = False
-            print("🔌 اتصال MT5 قطع شد")
+            log.info("🔌 MT5 قطع شد")

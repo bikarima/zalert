@@ -179,6 +179,10 @@ class NotificationService {
       onDidReceiveBackgroundNotificationResponse: _backgroundLocalNotifHandler,
     );
 
+    // Clear stale scheduled notifications from older app versions
+    // (prevents "Missing type parameter" on deserializing old saved notifications)
+    try { await _localNotif.cancelAll(); } catch (_) {}
+
     // FCM
     try {
       _fcm = FirebaseMessaging.instance;

@@ -1,14 +1,15 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
-import '../models/calendar_filter.dart';
-import '../widgets/calendar_filter_sheet.dart';
 import '../../../core/models/calendar_event_model.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_provider.dart';
+import '../../../core/widgets/shimmer_widgets.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -17,703 +18,556 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabs;
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   Timer? _ticker;
+  String _activeFilter = 'all'; // all / high / medium / low
+
+  static const _impactColors = {
+    'high':         Color(0xFFFF5252),
+    'medium':       Color(0xFFFFAB40),
+    'low':          Color(0xFF00E676),
+    'holiday':      Color(0xFF7C4DFF),
+    'non_economic': Color(0xFF607D8B),
+  };
+
+  static const _impactLabels = {
+    'high':         ('پرخطر', 'High'),
+    'medium':       ('متوسط', 'Medium'),
+    'low':          ('کم‌خطر', 'Low'),
+  };
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CalendarProvider>().load(week: 'thisweek');
-    });
-    // هر ثانیه UI رو آپدیت کن تا countdown زنده باشه
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CalendarProvider>().load();
     });
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
     _ticker?.cancel();
     super.dispose();
   }
 
+  List<CalendarEventModel> _filtered(List<CalendarEventModel> all) {
+    if (_activeFilter == 'all') return all;
+    return all.where((e) => e.impact == _activeFilter).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<CalendarProvider>();
-    final lang     = context.watch<LocaleProvider>().lang;
-    final isRtl    = lang == 'fa';
+    super.build(context);
+    final lang   = context.watch<LocaleProvider>().lang;
+    final isDark = context.watch<ThemeProvider>().isDark;
+    final prov   = context.watch<CalendarProvider>();
+    final events = _filtered(prov.events);
+    final next   = prov.nextHighImpact;
+
+    // group by date
+    final grouped = <String, List<CalendarEventModel>>{};
+    for (final e in events) {
+      grouped.putIfAbsent(e.date, () => []).add(e);
+    }
 
     return Directionality(
-      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+      textDirection: lang == 'fa' ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        backgroundColor: AppTheme.bg(context),
-        appBar: PreferredSize(
-          preferredSize: Size.fromHeight(130.h),
-          child: _CalendarHeader(
-            lang: lang,
-            provider: provider,
-            tabs: _tabs,
-            onFilter: () async {
-              final result = await showModalBottomSheet<CalendarFilter>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => CalendarFilterSheet(
-                  initial: provider.filter,
-                  lang: lang,
+        backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+        body: RefreshIndicator(
+          onRefresh: () => prov.load(),
+          color: const Color(0xFFFF5252),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+
+              // ── Header ────────────────────────────────────────────────
+              SliverAppBar(
+                expandedHeight: 155.h,
+                floating: false, pinned: true,
+                backgroundColor: Colors.transparent, elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _CalendarHeader(
+                    lang: lang, next: next, isDark: isDark,
+                  ),
                 ),
-              );
-              if (result != null) provider.applyFilter(result);
-            },
-            onRefresh: () => provider.load(week: provider.week),
-            onTabChanged: (i) => provider.load(
-                week: 'thisweek', todayOnly: i == 1),
-          ),
-        ),
-        body: Column(
-          children: [
-            // ── Next High Impact Banner ──────────────────────────────
-            if (provider.nextHighImpact != null)
-              _NextEventBanner(
-                  event: provider.nextHighImpact!, lang: lang),
-
-            // ── لیست ────────────────────────────────────────────────
-            Expanded(
-              child: provider.status == CalendarStatus.loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : provider.status == CalendarStatus.error
-                      ? _ErrorWidget(
-                          error: provider.error ?? '',
-                          onRetry: () => provider.load(week: provider.week))
-                      : provider.events.isEmpty
-                          ? Center(child: Text(
-                              lang == 'fa' ? 'رویدادی یافت نشد' : 'No events found',
-                              style: TextStyle(
-                                  color: AppTheme.textSec(context), fontSize: 13.sp)))
-                          : _EventList(events: provider.events, lang: lang),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Calendar Header ───────────────────────────────────────────────────────────
-
-class _CalendarHeader extends StatelessWidget {
-  final String lang;
-  final CalendarProvider provider;
-  final TabController tabs;
-  final VoidCallback onFilter;
-  final VoidCallback onRefresh;
-  final ValueChanged<int> onTabChanged;
-
-  const _CalendarHeader({
-    required this.lang,
-    required this.provider,
-    required this.tabs,
-    required this.onFilter,
-    required this.onRefresh,
-    required this.onTabChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
-    final isRtl   = lang == 'fa';
-    final today   = DateTime.now();
-    final weekday = _weekdayName(today.weekday, lang);
-    final dateStr = '${today.day} ${_monthName(today.month, lang)}';
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF1A1035), const Color(0xFF0D0D1A)]
-              : [const Color(0xFFEEEAFF), const Color(0xFFF5F5FF)],
-        ),
-        border: Border(
-          bottom: BorderSide(color: AppTheme.divider(context), width: 1),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Directionality(
-          textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── ردیف بالا: تاریخ + دکمه‌ها ───────────────────────
-              Padding(
-                padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
-                child: Row(children: [
-                  // آیکون تقویم با گرادیانت
-                  Container(
-                    width: 38.w, height: 38.w,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primary, Color(0xFF9C27B0)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(10.r),
-                      boxShadow: [BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.4),
-                        blurRadius: 8.r, offset: const Offset(0, 3),
-                      )],
-                    ),
-                    child: Icon(Icons.calendar_month_rounded,
-                        color: Colors.white, size: 20.sp),
-                  ),
-                  SizedBox(width: 10.w),
-
-                  // عنوان + تاریخ
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          lang == 'fa' ? 'تقویم اقتصادی' : 'Economic Calendar',
-                          style: TextStyle(
-                            color: AppTheme.text(context),
-                            fontSize: 15.sp,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '$weekday، $dateStr',
-                          style: TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 11.sp,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // تعداد رویدادهای فیلتر شده
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20.r),
-                      border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.event_note_rounded,
-                          color: AppTheme.primary, size: 12.sp),
-                      SizedBox(width: 4.w),
-                      Text('${provider.events.length}',
-                          style: TextStyle(
-                              color: AppTheme.primary,
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.bold)),
-                    ]),
-                  ),
-                  SizedBox(width: 8.w),
-
-                  // دکمه فیلتر
-                  _HeaderIconBtn(
-                    icon: Icons.tune_rounded,
-                    active: !provider.filter.isDefault,
-                    onTap: onFilter,
-                    badge: !provider.filter.isDefault,
-                  ),
-                  SizedBox(width: 4.w),
-                  _HeaderIconBtn(
-                    icon: Icons.refresh_rounded,
-                    onTap: onRefresh,
-                  ),
-                ]),
               ),
 
-              // ── تب بار سفارشی ─────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
-                child: Container(
-                  height: 36.h,
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface(context),
-                    borderRadius: BorderRadius.circular(10.r),
-                    border: Border.all(color: AppTheme.border(context)),
-                  ),
-                  child: TabBar(
-                    controller: tabs,
-                    onTap: onTabChanged,
-                    indicator: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primary, Color(0xFF9C27B0)],
+              // ── Filter chips ──────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: lang == 'fa' ? 'همه' : 'All',
+                        active: _activeFilter == 'all',
+                        color: AppTheme.primary,
+                        onTap: () => setState(() => _activeFilter = 'all'),
                       ),
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    dividerColor: Colors.transparent,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: AppTheme.textSec(context),
-                    labelStyle: TextStyle(
-                        fontSize: 12.sp, fontWeight: FontWeight.w600),
-                    unselectedLabelStyle: TextStyle(fontSize: 12.sp),
-                    padding: EdgeInsets.all(3.w),
-                    tabs: [
-                      Tab(text: lang == 'fa' ? 'این هفته' : 'This Week'),
-                      Tab(text: lang == 'fa' ? 'امروز' : 'Today'),
+                      SizedBox(width: 8.w),
+                      ..._impactLabels.entries.map((e) => Padding(
+                        padding: EdgeInsets.only(right: 8.w),
+                        child: _FilterChip(
+                          label: lang == 'fa' ? e.value.$1 : e.value.$2,
+                          active: _activeFilter == e.key,
+                          color: _impactColors[e.key] ?? AppTheme.primary,
+                          onTap: () => setState(() => _activeFilter = e.key),
+                        ),
+                      )),
                     ],
                   ),
                 ),
               ),
+
+              // ── Events ───────────────────────────────────────────────
+              if (prov.status == CalendarStatus.loading)
+                SliverPadding(
+                  padding: EdgeInsets.only(bottom: 120.h),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (_, __) => const ShimmerAlertTile(), childCount: 6,
+                    ),
+                  ),
+                )
+              else if (events.isEmpty)
+                SliverFillRemaining(
+                  child: _EmptyCalendar(lang: lang, isDark: isDark),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 120.h),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (_, i) {
+                        final date   = grouped.keys.elementAt(i);
+                        final dayEvs = grouped[date]!;
+                        return _DateSection(
+                          date:   date,
+                          events: dayEvs,
+                          lang:   lang,
+                          isDark: isDark,
+                          colors: _impactColors,
+                          index:  i,
+                        );
+                      },
+                      childCount: grouped.length,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
-
-  String _weekdayName(int weekday, String lang) {
-    if (lang == 'fa') {
-      const names = ['', 'دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه','یکشنبه'];
-      return names[weekday];
-    } else {
-      const names = ['', 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-      return names[weekday];
-    }
-  }
-
-  String _monthName(int month, String lang) {
-    if (lang == 'fa') {
-      const names = ['','ژانویه','فوریه','مارس','آوریل','مه','ژوئن',
-                     'ژوئیه','اوت','سپتامبر','اکتبر','نوامبر','دسامبر'];
-      return names[month];
-    } else {
-      const names = ['','Jan','Feb','Mar','Apr','May','Jun',
-                     'Jul','Aug','Sep','Oct','Nov','Dec'];
-      return names[month];
-    }
-  }
 }
 
-class _HeaderIconBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool active;
-  final bool badge;
+// ── Header with countdown ─────────────────────────────────────────────────────
 
-  const _HeaderIconBtn({
-    required this.icon,
-    required this.onTap,
-    this.active = false,
-    this.badge  = false,
-  });
+class _CalendarHeader extends StatelessWidget {
+  const _CalendarHeader({required this.lang, required this.next, required this.isDark});
+  final String lang;
+  final CalendarEventModel? next;
+  final bool isDark;
+
+  String _countdown(CalendarEventModel e) {
+    if (e.timeUtc.isEmpty) return '';
+    try {
+      final dt   = DateTime.parse(e.timeUtc).toLocal();
+      final diff = dt.difference(DateTime.now());
+      if (diff.isNegative) return lang == 'fa' ? 'در حال وقوع' : 'Happening now';
+      final h = diff.inHours;
+      final m = diff.inMinutes % 60;
+      final s = diff.inSeconds % 60;
+      if (h > 0) return '${h}h ${m}m';
+      if (m > 0) return '${m}m ${s}s';
+      return '${s}s';
+    } catch (_) { return ''; }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 34.w, height: 34.w,
-            decoration: BoxDecoration(
-              color: active
-                  ? AppTheme.primary.withOpacity(0.15)
-                  : AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(9.r),
-              border: Border.all(
-                color: active ? AppTheme.primary : AppTheme.border(context),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFCC2244), Color(0xFFFF5252), Color(0xFFFF8A65)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                lang == 'fa' ? 'تقویم اقتصادی' : 'Economic Calendar',
+                style: TextStyle(
+                  fontSize: 24.sp, fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            child: Icon(icon,
-                color: active ? AppTheme.primary : AppTheme.textSec(context),
-                size: 17.sp),
+              SizedBox(height: 6.h),
+              if (next != null) ...[
+                Row(children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.timer_outlined, size: 12.sp, color: Colors.white),
+                      SizedBox(width: 4.w),
+                      Text(
+                        '${lang == 'fa' ? 'بعدی: ' : 'Next: '}${next!.title}',
+                        style: TextStyle(fontSize: 11.sp, color: Colors.white,
+                            fontWeight: FontWeight.w600),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                    ]),
+                  ),
+                  SizedBox(width: 8.w),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Text(
+                      _countdown(next!),
+                      style: TextStyle(
+                        fontSize: 12.sp, color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'TexGyreAdventor',
+                      ),
+                    ),
+                  ),
+                ]),
+              ] else
+                Text(
+                  lang == 'fa' ? 'رویداد High Impact ای در پیش نیست' : 'No upcoming High Impact events',
+                  style: TextStyle(fontSize: 12.sp, color: Colors.white70),
+                ),
+            ],
           ),
         ),
-        if (badge)
-          Positioned(
-            top: -2.h, right: -2.w,
-            child: Container(
-              width: 8.w, height: 8.w,
-              decoration: const BoxDecoration(
-                  color: AppTheme.red, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+// ── Date section ──────────────────────────────────────────────────────────────
+
+class _DateSection extends StatelessWidget {
+  const _DateSection({
+    required this.date, required this.events, required this.lang,
+    required this.isDark, required this.colors, required this.index,
+  });
+
+  final String date;
+  final List<CalendarEventModel> events;
+  final String lang;
+  final Map<String, Color> colors;
+  final int index;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final highCount = events.where((e) => e.impact == 'high').length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 10.h),
+          child: Row(children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 5.h),
+              decoration: BoxDecoration(
+                color: highCount > 0
+                    ? const Color(0xFFFF5252).withOpacity(0.12)
+                    : AppTheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Text(
+                date,
+                style: TextStyle(
+                  fontSize: 12.sp, fontWeight: FontWeight.bold,
+                  color: highCount > 0
+                      ? const Color(0xFFFF5252)
+                      : AppTheme.primary,
+                  fontFamily: 'TexGyreAdventor',
+                ),
+              ),
             ),
-          ),
+            if (highCount > 0) ...[
+              SizedBox(width: 8.w),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF5252).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Text(
+                  '$highCount 🔴',
+                  style: TextStyle(fontSize: 10.sp, color: const Color(0xFFFF5252)),
+                ),
+              ),
+            ],
+          ]),
+        ).animate().fadeIn(delay: (index * 40).ms),
+        ...events.asMap().entries.map((e) => _EventCard(
+          event:  e.value,
+          lang:   lang,
+          isDark: isDark,
+          color:  colors[e.value.impact] ?? Colors.grey,
+          index:  index * 10 + e.key,
+        )),
+        SizedBox(height: 4.h),
       ],
     );
   }
 }
 
-// ── Next Event Banner با Progress Bar ────────────────────────────────────────
-
-class _NextEventBanner extends StatelessWidget {
-  final CalendarEventModel event;
-  final String lang;
-
-  const _NextEventBanner({required this.event, required this.lang});
-
-  @override
-  Widget build(BuildContext context) {
-    final remaining = event.timeUntil;
-    if (remaining == null) return const SizedBox.shrink();
-
-    final totalMins  = remaining.inMinutes;
-    final hours      = remaining.inHours;
-    final mins       = remaining.inMinutes % 60;
-    final secs       = remaining.inSeconds % 60;
-
-    // progress — نمایش 2 ساعت به عنوان کل بازه
-    const maxMins = 120.0;
-    final progress = (1.0 - (totalMins / maxMins)).clamp(0.0, 1.0);
-
-    final timeStr = hours > 0
-        ? '$hours:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}'
-        : '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-
-    final isUrgent = totalMins <= 10;
-
-    return Container(
-      margin: EdgeInsets.all(12.w),
-      padding: EdgeInsets.all(12.w),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isUrgent
-              ? [AppTheme.red.withOpacity(0.2), AppTheme.red.withOpacity(0.05)]
-              : [AppTheme.red.withOpacity(0.12), AppTheme.red.withOpacity(0.03)],
-        ),
-        borderRadius: BorderRadius.circular(14.r),
-        border: Border.all(
-          color: isUrgent
-              ? AppTheme.red.withOpacity(0.6)
-              : AppTheme.red.withOpacity(0.3),
-          width: isUrgent ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
-              decoration: BoxDecoration(
-                color: AppTheme.red.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8.r),
-              ),
-              child: Text('🔴 HIGH',
-                  style: TextStyle(color: AppTheme.red,
-                      fontSize: 10.sp, fontWeight: FontWeight.bold)),
-            ),
-            SizedBox(width: 8.w),
-            Text(event.currency,
-                style: TextStyle(color: AppTheme.text(context),
-                    fontSize: 12.sp, fontWeight: FontWeight.bold)),
-            const Spacer(),
-            // countdown
-            AnimatedContainer(
-              duration: 300.ms,
-              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-              decoration: BoxDecoration(
-                color: isUrgent
-                    ? AppTheme.red.withOpacity(0.2)
-                    : AppTheme.surface(context),
-                borderRadius: BorderRadius.circular(8.r),
-                border: Border.all(
-                    color: isUrgent ? AppTheme.red : AppTheme.border(context)),
-              ),
-              child: Text(
-                timeStr,
-                style: TextStyle(
-                  color: isUrgent ? AppTheme.red : AppTheme.text(context),
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ]),
-          SizedBox(height: 6.h),
-          Text(event.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: AppTheme.textSec(context), fontSize: 11.sp)),
-          SizedBox(height: 8.h),
-
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4.r),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 5.h,
-              backgroundColor: AppTheme.border(context),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isUrgent ? AppTheme.red : AppTheme.orange),
-            ),
-          ),
-          SizedBox(height: 4.h),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(lang == 'fa' ? 'الان' : 'Now',
-                style: TextStyle(color: AppTheme.textSec(context), fontSize: 9.sp)),
-            Text(lang == 'fa' ? 'زمان خبر: ${event.time}' : 'Event: ${event.time}',
-                style: TextStyle(color: AppTheme.red, fontSize: 9.sp,
-                    fontWeight: FontWeight.w600)),
-          ]),
-        ],
-      ),
-    ).animate().fadeIn(duration: 300.ms);
-  }
-}
-
-// ── لیست رویدادها ─────────────────────────────────────────────────────────────
-
-class _EventList extends StatelessWidget {
-  final List<CalendarEventModel> events;
-  final String lang;
-  const _EventList({required this.events, required this.lang});
-
-  @override
-  Widget build(BuildContext context) {
-    final Map<String, List<CalendarEventModel>> grouped = {};
-    for (final e in events) {
-      grouped.putIfAbsent(e.date, () => []).add(e);
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.only(bottom: 16.h),
-      itemCount: grouped.length,
-      itemBuilder: (_, i) {
-        final date   = grouped.keys.elementAt(i);
-        final dayEvs = grouped[date]!;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 4.h),
-              child: Row(children: [
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  child: Text(date,
-                      style: TextStyle(color: AppTheme.primary,
-                          fontSize: 11.sp, fontWeight: FontWeight.bold)),
-                ),
-                SizedBox(width: 8.w),
-                Expanded(child: Divider(color: AppTheme.divider(context), height: 1)),
-              ]),
-            ),
-            ...dayEvs.asMap().entries.map((entry) =>
-                _EventCard(event: entry.value, lang: lang)
-                    .animate()
-                    .fadeIn(duration: 200.ms,
-                        delay: Duration(milliseconds: entry.key * 40))),
-          ],
-        );
-      },
-    );
-  }
-}
-
-// ── کارت رویداد ───────────────────────────────────────────────────────────────
+// ── Event card ────────────────────────────────────────────────────────────────
 
 class _EventCard extends StatelessWidget {
+  const _EventCard({
+    required this.event, required this.lang, required this.isDark,
+    required this.color, required this.index,
+  });
+
   final CalendarEventModel event;
   final String lang;
-  const _EventCard({required this.event, required this.lang});
-
-  Color _impactColor(BuildContext context) {
-    switch (event.impact) {
-      case 'high':    return AppTheme.red;
-      case 'medium':  return AppTheme.orange;
-      case 'low':     return const Color(0xFFFFD600);
-      case 'holiday': return AppTheme.blue;
-      default:        return AppTheme.textSec(context);
-    }
-  }
+  final bool   isDark;
+  final Color  color;
+  final int    index;
 
   @override
   Widget build(BuildContext context) {
-    final impactColor = _impactColor(context);
-    final remaining   = event.timeUntil;
-    final isUpcoming  = remaining != null && remaining.inMinutes <= 60;
+    final hasData = event.forecast.isNotEmpty || event.previous.isNotEmpty
+        || event.actual.isNotEmpty;
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 3.h),
-      decoration: BoxDecoration(
-        color: AppTheme.card(context),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: isUpcoming && event.isHighImpact
-              ? impactColor.withOpacity(0.4)
-              : AppTheme.border(context),
-        ),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            // نوار impact
-            Container(
-              width: 4.w,
-              decoration: BoxDecoration(
-                color: impactColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(12.r),
-                  bottomLeft: Radius.circular(12.r),
-                ),
-              ),
+      margin: EdgeInsets.only(bottom: 8.h),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16.r),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: EdgeInsets.all(14.r),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(16.r),
+              border: Border.all(color: color.withOpacity(0.2)),
             ),
+            child: Row(
+              children: [
+                // Impact bar
+                Container(
+                  width: 4.w, height: 46.h,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2.r),
+                    boxShadow: [
+                      BoxShadow(color: color.withOpacity(0.4), blurRadius: 6),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 12.w),
 
-            // محتوا
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.all(10.w),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // زمان + ارز
-                    SizedBox(
-                      width: 52.w,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(event.time,
-                              style: TextStyle(
-                                  color: AppTheme.textSec(context),
-                                  fontSize: 10.sp)),
-                          SizedBox(height: 4.h),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 5.w, vertical: 2.h),
-                            decoration: BoxDecoration(
-                              color: impactColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6.r),
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            style: TextStyle(
+                              fontSize: 13.sp, fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
-                            child: Text(event.currency,
-                                style: TextStyle(
-                                    color: impactColor,
-                                    fontSize: 10.sp,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: 8.w),
-
-                    // عنوان + مقادیر
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(event.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: AppTheme.text(context),
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w600)),
-                          if (event.forecast.isNotEmpty ||
-                              event.previous.isNotEmpty ||
-                              event.actual.isNotEmpty) ...[
-                            SizedBox(height: 5.h),
-                            Row(children: [
-                              if (event.actual.isNotEmpty)
-                                _ValueChip(label: lang == 'fa' ? 'واقعی' : 'Actual',
-                                    value: event.actual, color: AppTheme.green),
-                              if (event.forecast.isNotEmpty) ...[
-                                SizedBox(width: 8.w),
-                                _ValueChip(label: lang == 'fa' ? 'پیش‌بینی' : 'Forecast',
-                                    value: event.forecast, color: AppTheme.blue),
-                              ],
-                              if (event.previous.isNotEmpty) ...[
-                                SizedBox(width: 8.w),
-                                _ValueChip(label: lang == 'fa' ? 'قبلی' : 'Previous',
-                                    value: event.previous,
-                                    color: AppTheme.textSec(context)),
-                              ],
-                            ]),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // dot + countdown کوچک
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 9.w, height: 9.w,
-                          decoration: BoxDecoration(
-                            color: impactColor,
-                            shape: BoxShape.circle,
-                            boxShadow: event.isHighImpact ? [BoxShadow(
-                              color: impactColor.withOpacity(0.5),
-                              blurRadius: 4.r, spreadRadius: 1,
-                            )] : null,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (remaining != null && remaining.inHours < 2) ...[
-                          SizedBox(height: 4.h),
-                          Text(
-                            remaining.inMinutes < 60
-                                ? '${remaining.inMinutes}m'
-                                : '${remaining.inHours}h',
-                            style: TextStyle(
-                                color: impactColor,
-                                fontSize: 9.sp,
-                                fontWeight: FontWeight.bold),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 6.w, vertical: 2.h),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6.r),
                           ),
+                          child: Text(
+                            event.currency,
+                            style: TextStyle(
+                              fontSize: 10.sp, color: color,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'TexGyreAdventor',
+                            ),
+                          ),
+                        ),
+                      ]),
+                      SizedBox(height: 4.h),
+                      Row(children: [
+                        Icon(Icons.schedule_outlined,
+                            size: 11.sp,
+                            color: isDark ? Colors.white38 : Colors.black38),
+                        SizedBox(width: 3.w),
+                        Text(
+                          event.time,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                            fontFamily: 'TexGyreAdventor',
+                          ),
+                        ),
+                        if (hasData) ...[
+                          SizedBox(width: 12.w),
+                          if (event.actual.isNotEmpty)
+                            _DataPill(
+                                label: lang == 'fa' ? 'واقعی' : 'Actual',
+                                value: event.actual,
+                                color: const Color(0xFF00E676)),
+                          if (event.forecast.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.only(right: 6.w),
+                              child: _DataPill(
+                                  label: lang == 'fa' ? 'پیش‌بینی' : 'Forecast',
+                                  value: event.forecast,
+                                  color: AppTheme.primary),
+                            ),
                         ],
-                      ],
-                    ),
-                  ],
+                      ]),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+    )
+        .animate()
+        .fadeIn(delay: (index * 30).ms, duration: 250.ms)
+        .slideX(begin: 0.04, end: 0);
+  }
+}
+
+class _DataPill extends StatelessWidget {
+  const _DataPill({required this.label, required this.value, required this.color});
+  final String label, value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(5.r),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(fontSize: 9.sp, color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+// ── Filter chip ───────────────────────────────────────────────────────────────
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label, required this.active,
+    required this.color, required this.onTap,
+  });
+  final String label;
+  final bool   active;
+  final Color  color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
+        decoration: BoxDecoration(
+          color:        active ? color : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20.r),
+          border:       Border.all(color: color.withOpacity(active ? 0 : 0.3)),
+          boxShadow: active ? [
+            BoxShadow(color: color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
+          ] : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.sp, fontWeight: FontWeight.w600,
+            color: active ? Colors.white : color,
+          ),
         ),
       ),
     );
   }
 }
 
-class _ValueChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _ValueChip({required this.label, required this.value, required this.color});
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+class _EmptyCalendar extends StatelessWidget {
+  const _EmptyCalendar({required this.lang, required this.isDark});
+  final String lang;
+  final bool   isDark;
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: TextStyle(color: AppTheme.textSec(context), fontSize: 9.sp)),
-      Text(value, style: TextStyle(color: color, fontSize: 11.sp,
-          fontWeight: FontWeight.bold)),
-    ]);
-  }
-}
-
-class _ErrorWidget extends StatelessWidget {
-  final String error;
-  final VoidCallback onRetry;
-  const _ErrorWidget({required this.error, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.error_outline_rounded, color: AppTheme.red, size: 36.sp),
-      SizedBox(height: 10.h),
-      Text('خطا در دریافت تقویم',
-          style: TextStyle(color: AppTheme.textSec(context), fontSize: 13.sp)),
-      SizedBox(height: 12.h),
-      ElevatedButton(onPressed: onRetry, child: const Text('تلاش مجدد')),
-    ]));
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 90.w, height: 90.w,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFFF5252).withOpacity(0.15),
+                const Color(0xFFFF8A65).withOpacity(0.1),
+              ],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.event_available_outlined,
+              size: 44.sp, color: const Color(0xFFFF5252).withOpacity(0.6)),
+        ).animate().scale(duration: 500.ms, curve: Curves.elasticOut),
+        SizedBox(height: 16.h),
+        Text(
+          lang == 'fa' ? 'رویدادی پیدا نشد' : 'No events found',
+          style: TextStyle(
+            fontSize: 16.sp, fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white70 : Colors.black54,
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Text(
+          lang == 'fa' ? 'فیلتر رو تغییر بده یا صبر کن' : 'Try a different filter or pull to refresh',
+          style: TextStyle(fontSize: 12.sp,
+              color: isDark ? Colors.white30 : Colors.black38),
+        ),
+      ],
+    );
   }
 }
