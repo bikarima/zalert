@@ -8,9 +8,14 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Battery optimisation exemption — CRITICAL for background push delivery on Android 6+ -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Foreground service for reliable delivery on MIUI / EMUI / OxygenOS -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
     <application
-        android:label="Alert"
+        android:label="ZAlert"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config">
@@ -20,10 +25,10 @@
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
 
-        <!-- Default FCM notification channel -->
+        <!-- Default FCM channel — must match channel created in NotificationService -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="alerts" />
+            android:value="triggered" />
 
         <!-- Default notification icon -->
         <meta-data
@@ -63,6 +68,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Battery optimization settings intent -->
+        <intent>
+            <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
         </intent>
     </queries>
 </manifest>

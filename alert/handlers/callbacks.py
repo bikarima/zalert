@@ -2,25 +2,15 @@
 CallbackRouter — routes all InlineKeyboard button presses.
 
 Routing convention: callback_data = "domain:action[:param]"
-  Domain   Action            Param
-  -------  ----------------  -----------
-  nav      main              —
-  menu     new_alert         —
-  menu     list              —
-  menu     price             —
-  menu     calendar          —
-  menu     stats             —
-  menu     profile           —
-  menu     status            —
-  alert    view              <alert_id>
-  alert    del               <alert_id>
-  alert    clear_confirm     —
-  alert    clear_do          —
-  newalert <SYMBOL>          —
-  price    show / refresh    <SYMBOL>
-  price    set               <SYMBOL>
 
-Adding a new button? Add a new row here — no other file needs to change.
+  Domain    Description
+  --------  -------------------------------------------------
+  nav       Navigation (back_main, etc.)
+  menu      User-facing menu screens
+  alert     Alert CRUD for current user
+  price     Price show / refresh / set alert
+  newalert  Symbol picker for new alert
+  admin     Admin panel (admin-only, guarded in handle_callback)
 """
 import logging
 
@@ -30,6 +20,7 @@ from telegram.ext import ContextTypes
 
 from .base    import BaseHandler
 from .market  import MarketHandlers
+from .admin   import AdminHandlers
 from keyboards import KeyboardFactory
 from utils     import fmt_price, direction_label, progress_bar
 
@@ -39,31 +30,45 @@ log = logging.getLogger("CallbackRouter")
 class CallbackRouter(BaseHandler):
     """
     Single entry point for all callback queries.
-    Inject MarketHandlers so we can reuse build_status_text / price_text.
+    Injects MarketHandlers + AdminHandlers so shared logic isn't duplicated.
     """
 
-    def __init__(self, db, mt5, start_time, market: MarketHandlers) -> None:
+    def __init__(self, db, mt5, start_time, market: MarketHandlers, admin: AdminHandlers) -> None:
         super().__init__(db, mt5, start_time)
         self._market = market
+        self._admin  = admin
 
-    # ── Entry point ────────────────────────────────────────────────────────────
+    # ── Entry point ───────────────────────────────────────────────────────────
 
     async def route(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
 
-        if not await self.can_use_callback(update):
-            await query.answer("⛔️ دسترسی ندارید.", show_alert=True)
-            return
-
         data    = query.data or ""
         user_id = update.effective_user.id
-        parts   = data.split(":", 2)            # max 3 parts
+        parts   = data.split(":", 2)
         domain  = parts[0]
         action  = parts[1] if len(parts) > 1 else ""
         param   = parts[2] if len(parts) > 2 else ""
 
         log.debug("callback: user=%s data=%s", user_id, data)
+
+        # Admin domain — only admin may proceed
+        if domain == "admin":
+            if not self._is_admin(update):
+                await query.answer("⛔️ فقط ادمین.", show_alert=True)
+                return
+            try:
+                await self._admin.handle_callback(query, update, action, param)
+            except Exception:
+                log.exception("admin callback error: data=%s", data)
+                await query.answer("❌ خطای داخلی.", show_alert=True)
+            return
+
+        # Regular domains — apply normal access gate
+        if not await self.can_use_callback(update):
+            await query.answer("⛔️ دسترسی ندارید.", show_alert=True)
+            return
 
         try:
             if domain == "nav":
@@ -75,11 +80,11 @@ class CallbackRouter(BaseHandler):
             elif domain == "price":
                 await self._price(query, action, param)
             elif domain == "newalert":
-                await self._newalert_pick(query, action)   # action IS the symbol here
+                await self._newalert_pick(query, action)
             else:
                 log.warning("unknown callback domain=%s data=%s", domain, data)
         except Exception:
-            log.exception("unhandled callback error: data=%s", data)
+            log.exception("callback error: data=%s", data)
             await query.answer("❌ خطای داخلی.", show_alert=True)
 
     # ── nav ───────────────────────────────────────────────────────────────────
@@ -241,19 +246,16 @@ class CallbackRouter(BaseHandler):
         if not alert or alert.get("user_id") != user_id:
             await query.answer("❌ آلرت پیدا نشد.", show_alert=True)
             return
-
         cur  = self.mt5.get_price(alert["symbol"])
         bar  = progress_bar(cur, alert["target_price"], alert["alert_type"]) if cur else ""
         diff = f"{abs(cur - alert['target_price']) / cur * 100:.2f}%" if cur else "—"
-
         await query.edit_message_text(
             f"🔍 <b>جزئیات آلرت #{alert_id}</b>\n\n"
             f"📊 نماد: <b>{alert['symbol']}</b>\n"
             f"🎯 هدف: <code>{fmt_price(alert['target_price'])}</code>\n"
             f"💵 قیمت: <code>{fmt_price(cur) if cur else '—'}</code>\n"
             f"📈 جهت: {direction_label(alert['alert_type'])}\n"
-            f"📏 فاصله: <b>{diff}</b>\n"
-            f"{bar}\n"
+            f"📏 فاصله: <b>{diff}</b>\n{bar}\n"
             f"📅 ثبت: {alert.get('created_at', '—')}",
             parse_mode=ParseMode.HTML,
             reply_markup=KeyboardFactory.alert_detail(alert_id),
@@ -280,7 +282,9 @@ class CallbackRouter(BaseHandler):
         except Exception:
             log.exception("calendar render error")
             text = "❌ خطا در دریافت تقویم."
-        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=KeyboardFactory.back_main())
+        await query.edit_message_text(
+            text, parse_mode=ParseMode.HTML, reply_markup=KeyboardFactory.back_main()
+        )
 
     async def _render_stats(self, query) -> None:
         data = await self.db.get_stats()
@@ -293,7 +297,9 @@ class CallbackRouter(BaseHandler):
                 bar = "█" * min(cnt, 10) + "░" * (10 - min(cnt, 10))
                 lines.append(f"<code>{sym:<10}</code>  [{bar}]  {cnt}")
             text = "\n".join(lines)
-        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=KeyboardFactory.back_main())
+        await query.edit_message_text(
+            text, parse_mode=ParseMode.HTML, reply_markup=KeyboardFactory.back_main()
+        )
 
     async def _render_profile(self, query, update, user_id: int) -> None:
         import config as cfg
@@ -302,7 +308,6 @@ class CallbackRouter(BaseHandler):
         trig   = [a for a in all_a if a.get("triggered")]
         name   = update.effective_user.first_name or update.effective_user.username or "—"
         syms   = list({a["symbol"] for a in all_a})[:5]
-
         await query.edit_message_text(
             f"👤 <b>پروفایل</b>\n\n"
             f"🙋 نام: <b>{name}</b>\n"
