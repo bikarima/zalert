@@ -1,29 +1,31 @@
-
 name: Build Android APK
 
 on:
   push:
     branches: [ '**' ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build APK
+    name: "Build APK [${{ github.ref_name }}]"
     runs-on: ubuntu-latest
 
     steps:
-      # ── دریافت کد ────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── نصب Java ─────────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # ── نصب Flutter ──────────────────────────────────────────────
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -31,25 +33,31 @@ jobs:
           channel: stable
           cache: true
 
-      # ── بازیابی google-services.json از فایل ریپو ───────────────
-      # فایل مستقیم در ریپو موجوده (ریپو private است)
       - name: Verify google-services.json
         run: cat alert_app/android/app/google-services.json | python3 -c "import sys,json; json.load(sys.stdin); print('google-services.json is valid')"
 
-      # ── نصب پکیج‌ها ───────────────────────────────────────────────
       - name: Flutter pub get
         working-directory: alert_app
         run: flutter pub get
 
-      # ── بیلد APK ─────────────────────────────────────────────────
       - name: Build APK (release)
         working-directory: alert_app
         run: flutter build apk --release --no-tree-shake-icons
 
-      # ── آپلود APK به عنوان Artifact ──────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: alert-release-${{ github.run_number }}
+          name: "apk-${{ github.ref_name }}-${{ github.run_number }}"
           path: alert_app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "### Build Info" >> $GITHUB_STEP_SUMMARY
+          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run | #${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
